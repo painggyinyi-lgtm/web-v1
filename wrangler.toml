@@ -1,28 +1,19 @@
-#:schema node_modules/wrangler/config-schema.json
 name = "kp-anon-website"
-main = ".next/standalone/server.js" # Next.js အတွက် worker entry point
-compatibility_date = "2024-04-03"
+main = "src/index.ts" # သို့မဟုတ် project setup အတိုင်း (Next.js ဆိုလျှင် မလိုပါ)
+compatibility_date = "2024-04-01"
 
-# 1. Environment Variables (လိုအပ်ရင် သုံးရန်)
-[vars]
-NEXT_PUBLIC_SITE_URL = "https://your-domain.com"
-
-# 2. D1 Database Configuration (Database ချိတ်ဆက်ရန်)
-[[d1_databases]]
-binding = "DB"                               # Code ထဲမှာ သုံးမယ့် အမည်
-database_name = "kpanon-db"                  # Dashboard ထဲက နာမည်
-database_id = "xxxx-xxxx-xxxx-xxxx"          # Dashboard ကနေ ရလာမယ့် ID အစစ်ကို ထည့်ပါ
-
-# 3. R2 Bucket Configuration (ပုံနှင့် Video များ သိမ်းရန်)
+# ၁။ R2 Bucket ပုံတွေသိမ်းဖို့ Binding
 [[r2_buckets]]
-binding = "MY_BUCKET"                        # Code ထဲမှာ သုံးမယ့် အမည်
-bucket_name = "kpanon-media"                 # Dashboard ထဲက နာမည်
+binding = "MY_BUCKET"           # Code ထဲမှာ သုံးထားတဲ့ အမည် (မပြောင်းပါနဲ့)
+bucket_name = "trail"    # Cloudflare Dashboard ထဲမှာ ဆောက်ထားတဲ့ Bucket နာမည်
 
-# 4. Deployment Settings
-[observability]
-enabled = true
+# ၂။ D1 Database စာတွေသိမ်းဖို့ Binding
+[[d1_databases]]
+binding = "DB"                  # Code ထဲမှာ သုံးထားတဲ့ အမည် (မပြောင်းပါနဲ့)
+database_name = "kpanon-db"     # Cloudflare Dashboard ထဲမှာ ဆောက်ထားတဲ့ Database နာမည်
+database_id = "8335c40741d06aa6838953c2828d6599"  # သင့်ရဲ့ D1 Database ID ကို ဒီမှာ ထည့်ပါ
 
-# Assets Configuration (Static files များအတွက်)
-[assets]
-directory = ".next/static"
-binding = "ASSETS"
+# ၃။ Environment Variables (လိုအပ်လျှင်)
+[vars]
+# ပုံတွေကို ပြန်ပြဖို့ Public URL ကို ဒီမှာလည်း ထည့်ထားနိုင်ပါတယ်
+NEXT_PUBLIC_R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"
