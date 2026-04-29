@@ -1,15 +1,12 @@
-# ၁။ R2 Bucket ပုံတွေသိမ်းဖို့ Binding
+name = "kp-anon-website"
+compatibility_date = "2024-04-01"
+pages_build_output_dir = ".next"
+
 [[r2_buckets]]
-binding = "MY_BUCKET"           # Code ထဲမှာ သုံးထားတဲ့ အမည် (မပြောင်းပါနဲ့)
-bucket_name = "trail"    # Cloudflare Dashboard ထဲမှာ ဆောက်ထားတဲ့ Bucket နာမည်
+binding = "MY_BUCKET"   # ဒါက Backend code ထဲမှာ သုံးထားတာမို့ မပြောင်းပါနဲ့
+bucket_name = "trail"   # ဒီနေရာမှာ 'kpanon-media' အစား 'trail' လို့ ပြောင်းပေးပါ (Dashboard ထဲကအတိုင်း)
 
-# ၂။ D1 Database စာတွေသိမ်းဖို့ Binding
 [[d1_databases]]
-binding = "DB"                  # Code ထဲမှာ သုံးထားတဲ့ အမည် (မပြောင်းပါနဲ့)
-database_name = "kpanon-db"     # Cloudflare Dashboard ထဲမှာ ဆောက်ထားတဲ့ Database နာမည်
-database_id = "8335c40741d06aa6838953c2828d6599"  # သင့်ရဲ့ D1 Database ID ကို ဒီမှာ ထည့်ပါ
-
-# ၃။ Environment Variables (လိုအပ်လျှင်)
-[vars]
-# ပုံတွေကို ပြန်ပြဖို့ Public URL ကို ဒီမှာလည်း ထည့်ထားနိုင်ပါတယ်
-NEXT_PUBLIC_R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"
+binding = "DB"
+database_name = "kpanon-db"
+database_id = "8335c407-41d0-6aa6-8389-53c2828d6599" # အစ်ကို့ Account ID နဲ့ မမှားပါစေနဲ့၊ D1 ID သီးသန့်ရှိပါတယ်
