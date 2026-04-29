@@ -7,6 +7,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [commentInputs, setCommentInputs] = useState<{ [key: number]: string }>({});
+  // Comment Box ဖွင့်/ပိတ် သိမ်းဆည်းရန် state
+  const [activeCommentBox, setActiveCommentBox] = useState<{ [key: number]: boolean }>({});
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -68,9 +70,6 @@ export default function Home() {
         setSelectedFile(null);
         setPreviewUrl(null);
         fetchPosts();
-      } else {
-        const err = await response.json();
-        alert("Error: " + err.error);
       }
     } catch (error) {
       alert("Network Error ဖြစ်သွားပါတယ်");
@@ -107,7 +106,6 @@ export default function Home() {
     }
   };
 
-  // --- ပြင်ဆင်ထားသော Comment Submit Function ---
   const handleCommentSubmit = async (postId: number) => {
     const commentText = commentInputs[postId];
     if (!commentText?.trim()) return;
@@ -120,19 +118,23 @@ export default function Home() {
       });
       
       if (response.ok) {
-        // Comment box ကို ရှင်းထုတ်တယ်
         setCommentInputs(prev => ({ ...prev, [postId]: "" }));
-        // အချက်အလက်အသစ်တွေ ချက်ချင်းပေါ်လာအောင် fetch လုပ်တယ်
+        // မှတ်ချက်ပေးပြီးရင် Box ကို ပြန်ပိတ်မယ်
+        setActiveCommentBox(prev => ({ ...prev, [postId]: false }));
         await fetchPosts();
-      } else {
-        const err = await response.json();
-        console.error("Comment failed:", err.error);
       }
     } catch (error) {
       console.error("Comment error:", error);
     }
   };
-  // ------------------------------------------
+
+  // Comment Box ကို Toggle လုပ်ပေးမည့် function
+  const toggleCommentBox = (postId: number) => {
+    setActiveCommentBox(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] text-slate-100' : 'bg-[#f8fafc] text-slate-900'}`}>
@@ -213,7 +215,11 @@ export default function Home() {
                 <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${darkMode ? 'bg-slate-800 hover:bg-blue-500/10 text-blue-400' : 'bg-blue-50 hover:bg-blue-100 text-blue-600'}`}>
                   👍 {post.likes || 0}
                 </button>
-                <button className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
+                {/* Comment Icon ကို နှိပ်လျှင် Box ပေါ်လာအောင် လုပ်ထားသည် */}
+                <button 
+                  onClick={() => toggleCommentBox(post.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${activeCommentBox[post.id] ? 'bg-blue-500 text-white' : (darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500')}`}
+                >
                   💬 {post.comments?.length || 0}
                 </button>
                 <button onClick={() => handleShare(post.content)} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all hover:scale-105 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -221,6 +227,27 @@ export default function Home() {
                 </button>
               </div>
 
+              {/* Comment Box (Toggle ဖြစ်မှ ပေါ်လာမည်) */}
+              {activeCommentBox[post.id] && (
+                <div className="mt-6 flex gap-3 animate-in slide-in-from-top-2 duration-300">
+                  <input 
+                    autoFocus
+                    className={`flex-1 px-5 py-3 rounded-2xl text-sm font-medium outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-blue-600' : 'bg-slate-100 border-transparent focus:bg-white focus:border-blue-300'}`}
+                    placeholder="မှတ်ချက်ပေးရန်..."
+                    value={commentInputs[post.id] || ""}
+                    onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
+                  />
+                  <button 
+                    onClick={() => handleCommentSubmit(post.id)}
+                    className="w-12 h-12 flex items-center justify-center bg-blue-600 text-white rounded-2xl shadow-lg hover:bg-blue-500 active:scale-90 transition-all"
+                  >
+                    🚀
+                  </button>
+                </div>
+              )}
+
+              {/* Comment List အပိုင်း */}
               <div className="mt-6 space-y-3">
                 {post.comments?.map((comment: any) => (
                   <div key={comment.id} className={`p-4 rounded-2xl text-[14px] leading-relaxed shadow-sm ${darkMode ? 'bg-slate-800/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
@@ -228,22 +255,6 @@ export default function Home() {
                     {comment.content}
                   </div>
                 ))}
-              </div>
-
-              <div className="mt-6 flex gap-3">
-                <input 
-                  className={`flex-1 px-5 py-3 rounded-2xl text-sm font-medium outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-blue-600' : 'bg-slate-100 border-transparent focus:bg-white focus:border-blue-300'}`}
-                  placeholder="မှတ်ချက်ပေးရန်..."
-                  value={commentInputs[post.id] || ""}
-                  onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
-                />
-                <button 
-                  onClick={() => handleCommentSubmit(post.id)}
-                  className="w-12 h-12 flex items-center justify-center bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-600/20 hover:bg-blue-500 active:scale-90 transition-all"
-                >
-                  🚀
-                </button>
               </div>
             </div>
           ))}
