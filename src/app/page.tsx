@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 
 // မှတ်ချက် - သင့်ရဲ့ R2 Public URL (သို့မဟုတ် Custom Domain) ကို ဒီနေရာမှာ ထည့်ပါ
-const R2_URL = "https://pub-xxxxxx.r2.dev"; 
+const R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"; 
 
 export default function Home() {
   const [content, setContent] = useState("");
