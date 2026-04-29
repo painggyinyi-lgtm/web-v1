@@ -1,0 +1,28 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "kp-anon-website"
+main = ".next/standalone/server.js" # Next.js အတွက် worker entry point
+compatibility_date = "2024-04-03"
+
+# 1. Environment Variables (လိုအပ်ရင် သုံးရန်)
+[vars]
+NEXT_PUBLIC_SITE_URL = "https://your-domain.com"
+
+# 2. D1 Database Configuration (Database ချိတ်ဆက်ရန်)
+[[d1_databases]]
+binding = "DB"                               # Code ထဲမှာ သုံးမယ့် အမည်
+database_name = "kpanon-db"                  # Dashboard ထဲက နာမည်
+database_id = "xxxx-xxxx-xxxx-xxxx"          # Dashboard ကနေ ရလာမယ့် ID အစစ်ကို ထည့်ပါ
+
+# 3. R2 Bucket Configuration (ပုံနှင့် Video များ သိမ်းရန်)
+[[r2_buckets]]
+binding = "MY_BUCKET"                        # Code ထဲမှာ သုံးမယ့် အမည်
+bucket_name = "kpanon-media"                 # Dashboard ထဲက နာမည်
+
+# 4. Deployment Settings
+[observability]
+enabled = true
+
+# Assets Configuration (Static files များအတွက်)
+[assets]
+directory = ".next/static"
+binding = "ASSETS"
