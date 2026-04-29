@@ -247,14 +247,34 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Comment List အပိုင်း */}
-              <div className="mt-6 space-y-3">
-                {post.comments?.map((comment: any) => (
-                  <div key={comment.id} className={`p-4 rounded-2xl text-[14px] leading-relaxed shadow-sm ${darkMode ? 'bg-slate-800/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
-                    <span className="font-black text-blue-500 mr-2 uppercase text-[10px] tracking-widest italic">Anon</span>
-                    {comment.content}
-                  </div>
-                ))}
+              {/* Comment List အပိုင်း - Scrollable Area ဖြင့် ပြင်ဆင်ထားသည် */}
+              <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar transition-all">
+                {post.comments && post.comments.length > 0 ? (
+                  post.comments.map((comment: any) => (
+                    <div 
+                      key={comment.id} 
+                      className={`p-4 rounded-2xl text-[14px] leading-relaxed shadow-sm border animate-in fade-in slide-in-from-bottom-1 duration-300 ${
+                        darkMode 
+                          ? 'bg-slate-800/40 text-slate-300 border-slate-700/50' 
+                          : 'bg-slate-50 text-slate-600 border-slate-200/50'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-black text-blue-500 uppercase text-[10px] tracking-widest italic">
+                          Anon
+                        </span>
+                        <span className="text-[9px] opacity-40 font-bold">
+                          {new Date(comment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="break-words">{comment.content}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className={`text-center py-2 text-[11px] font-bold uppercase tracking-widest opacity-20`}>
+                    No comments yet
+                  </p>
+                )}
               </div>
             </div>
           ))}
