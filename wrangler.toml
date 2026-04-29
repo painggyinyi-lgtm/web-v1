@@ -1,7 +1,3 @@
-name = "kp-anon-website"
-main = "src/index.ts" # သို့မဟုတ် project setup အတိုင်း (Next.js ဆိုလျှင် မလိုပါ)
-compatibility_date = "2024-04-01"
-
 # ၁။ R2 Bucket ပုံတွေသိမ်းဖို့ Binding
 [[r2_buckets]]
 binding = "MY_BUCKET"           # Code ထဲမှာ သုံးထားတဲ့ အမည် (မပြောင်းပါနဲ့)
