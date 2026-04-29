@@ -10,7 +10,6 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // Theme စစ်ဆေးခြင်း
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
@@ -26,12 +25,11 @@ export default function Home() {
     document.documentElement.classList.toggle("dark");
   };
 
-  // Real-time Polling (၅ စက္ကန့်တစ်ခါ အလိုအလျောက် Update လုပ်မယ်)
   const fetchPosts = async () => {
     try {
       const res = await fetch("/api/posts");
       const data = await res.json();
-      setPosts(data);
+      if (Array.isArray(data)) setPosts(data);
     } catch (error) {
       console.error("Fetch error:", error);
     }
@@ -43,7 +41,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // ပုံရွေးချယ်ခြင်းနှင့် Preview ပြခြင်း
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -52,26 +49,33 @@ export default function Home() {
     }
   };
 
-  // ပို့စ်တင်ခြင်း
+  // ပို့စ်တင်ခြင်း Function (ဒီနေရာကို အဓိက ပြင်ထားပါတယ်)
   const handleSubmit = async () => {
     if (!content.trim() && !selectedFile) return;
     setLoading(true);
     try {
-      // မှတ်ချက် - ပုံတင်ဖို့အတွက် Cloudflare R2 လိုအပ်ပါမယ်။ 
-      // လောလောဆယ် စာသားသီးသန့်တင်တဲ့ ပုံစံနဲ့ပဲ ရေးပေးထားပါတယ်။
       const response = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        // Database column တွေနဲ့ ကိုက်အောင် null value တွေပါ ပို့ပေးရပါမယ်
+        body: JSON.stringify({ 
+          content,
+          media_url: null, 
+          media_type: null 
+        }),
       });
+      
       if (response.ok) {
         setContent("");
         setSelectedFile(null);
         setPreviewUrl(null);
         fetchPosts();
+      } else {
+        const err = await response.json();
+        alert("Error: " + err.error);
       }
     } catch (error) {
-      alert("Error ဖြစ်သွားပါတယ်");
+      alert("Network Error ဖြစ်သွားပါတယ်");
     } finally {
       setLoading(false);
     }
@@ -126,14 +130,13 @@ export default function Home() {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] text-slate-100' : 'bg-[#f8fafc] text-slate-900'}`}>
-      {/* Navigation */}
       <nav className={`sticky top-0 z-50 border-b transition-colors duration-300 ${darkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200/60'} backdrop-blur-md`}>
         <div className="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-xl shadow-blue-500/20">
               <span className="text-white font-black text-xl italic">K</span>
             </div>
-            <h1 className="text-xl font-black tracking-tighter">KP ANON <span className="text-blue-500 text-[10px] tracking-normal font-bold bg-blue-500/10 px-2 py-0.5 rounded-full ml-1">v2.0</span></h1>
+            <h1 className="text-xl font-black tracking-tighter">KP ANON <span className="text-blue-500 text-[10px] tracking-normal font-bold bg-blue-500/10 px-2 py-0.5 rounded-full ml-1">v1.0</span></h1>
           </div>
           <button onClick={toggleTheme} className={`p-2.5 rounded-2xl border transition-all active:scale-90 ${darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400 shadow-lg shadow-yellow-500/10' : 'bg-slate-100 border-slate-200 text-slate-600 shadow-sm'}`}>
             {darkMode ? "☀️ Light" : "🌙 Dark"}
@@ -142,7 +145,6 @@ export default function Home() {
       </nav>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
-        {/* Post Creation Box */}
         <div className={`rounded-3xl shadow-2xl p-6 mb-12 border transition-all ${darkMode ? 'bg-slate-900 border-slate-800 shadow-black/40' : 'bg-white border-slate-100 shadow-slate-200/50'}`}>
           <div className="flex gap-4">
             <div className="hidden sm:flex w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 items-center justify-center text-white text-xl shadow-lg">✍️</div>
@@ -155,11 +157,10 @@ export default function Home() {
             />
           </div>
 
-          {/* Image Preview */}
           {previewUrl && (
             <div className="mt-4 relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
               <img src={previewUrl} alt="Preview" className="w-full h-48 object-cover" />
-              <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full shadow-lg">✕</button>
+              <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-2 right-2 bg-red-50 text-white p-1 rounded-full shadow-lg">✕</button>
             </div>
           )}
 
@@ -181,7 +182,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Feed Section */}
         <div className="space-y-8">
           <div className="flex items-center gap-4">
             <h2 className={`text-xs font-black uppercase tracking-[0.3em] ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Recent Updates</h2>
@@ -195,7 +195,7 @@ export default function Home() {
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-xl font-black text-blue-500">U</div>
                   <div>
                     <p className="font-black text-[15px]">Anonymous User</p>
-                    <p className="text-[10px] opacity-50 font-bold uppercase tracking-tighter">Verified Member • Just Now</p>
+                    <p className="text-[10px] opacity-50 font-bold uppercase tracking-tighter">Verified Member • {new Date(post.created_at).toLocaleTimeString()}</p>
                   </div>
                 </div>
                 <button onClick={() => handleDelete(post.id)} className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${darkMode ? 'hover:bg-red-500/10 text-slate-600 hover:text-red-500' : 'hover:bg-red-50 text-slate-400 hover:text-red-500'}`}>🗑️</button>
@@ -203,7 +203,6 @@ export default function Home() {
 
               <p className="text-lg leading-[1.7] font-medium mb-6 whitespace-pre-wrap">{post.content}</p>
 
-              {/* Action Buttons */}
               <div className="flex items-center gap-2 sm:gap-6 pt-5 border-t border-slate-100 dark:border-slate-800">
                 <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${darkMode ? 'bg-slate-800 hover:bg-blue-500/10 text-blue-400' : 'bg-blue-50 hover:bg-blue-100 text-blue-600'}`}>
                   👍 {post.likes || 0}
@@ -216,7 +215,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* Comments Area */}
               <div className="mt-6 space-y-3">
                 {post.comments?.map((comment: any) => (
                   <div key={comment.id} className={`p-4 rounded-2xl text-[14px] leading-relaxed shadow-sm ${darkMode ? 'bg-slate-800/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
@@ -226,7 +224,6 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Comment Input Box */}
               <div className="mt-6 flex gap-3">
                 <input 
                   className={`flex-1 px-5 py-3 rounded-2xl text-sm font-medium outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-blue-600' : 'bg-slate-100 border-transparent focus:bg-white focus:border-blue-300'}`}
