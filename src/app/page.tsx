@@ -49,7 +49,6 @@ export default function Home() {
     }
   };
 
-  // ပို့စ်တင်ခြင်း Function (ဒီနေရာကို အဓိက ပြင်ထားပါတယ်)
   const handleSubmit = async () => {
     if (!content.trim() && !selectedFile) return;
     setLoading(true);
@@ -57,7 +56,6 @@ export default function Home() {
       const response = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Database column တွေနဲ့ ကိုက်အောင် null value တွေပါ ပို့ပေးရပါမယ်
         body: JSON.stringify({ 
           content,
           media_url: null, 
@@ -109,6 +107,7 @@ export default function Home() {
     }
   };
 
+  // --- ပြင်ဆင်ထားသော Comment Submit Function ---
   const handleCommentSubmit = async (postId: number) => {
     const commentText = commentInputs[postId];
     if (!commentText?.trim()) return;
@@ -119,14 +118,21 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ post_id: postId, content: commentText }),
       });
+      
       if (response.ok) {
-        setCommentInputs({ ...commentInputs, [postId]: "" });
-        fetchPosts();
+        // Comment box ကို ရှင်းထုတ်တယ်
+        setCommentInputs(prev => ({ ...prev, [postId]: "" }));
+        // အချက်အလက်အသစ်တွေ ချက်ချင်းပေါ်လာအောင် fetch လုပ်တယ်
+        await fetchPosts();
+      } else {
+        const err = await response.json();
+        console.error("Comment failed:", err.error);
       }
     } catch (error) {
       console.error("Comment error:", error);
     }
   };
+  // ------------------------------------------
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] text-slate-100' : 'bg-[#f8fafc] text-slate-900'}`}>
