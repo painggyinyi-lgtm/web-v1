@@ -1,21 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge'; // Cloudflare အတွက် လိုအပ်ပါတယ်
+export const runtime = 'edge';
 
-export async function GET(request: NextRequest) {
+// Post အားလုံးကို ယူမယ်
+export async function GET() {
   const db = (process.env as any).DB;
   const { results } = await db.prepare('SELECT * FROM posts ORDER BY created_at DESC').all();
   return NextResponse.json(results);
 }
 
+// Post အသစ်တင်မယ်
 export async function POST(request: NextRequest) {
   const db = (process.env as any).DB;
-  const { content } = await request.json();
+  const { content, media_url, media_type } = await request.json();
+  await db.prepare('INSERT INTO posts (content, media_url, media_type) VALUES (?, ?, ?)')
+    .bind(content, media_url, media_type).run();
+  return NextResponse.json({ success: true });
+}
 
-  if (!content) {
-    return NextResponse.json({ error: "Content is required" }, { status: 400 });
+// Like သို့မဟုတ် Delete လုပ်မယ်
+export async function PATCH(request: NextRequest) {
+  const db = (process.env as any).DB;
+  const { id, action } = await request.json();
+  
+  if (action === 'like') {
+    await db.prepare('UPDATE posts SET likes = likes + 1 WHERE id = ?').bind(id).run();
   }
+  return NextResponse.json({ success: true });
+}
 
-  await db.prepare('INSERT INTO posts (content) VALUES (?)').bind(content).run();
+export async function DELETE(request: NextRequest) {
+  const db = (process.env as any).DB;
+  const { id } = await request.json();
+  await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
   return NextResponse.json({ success: true });
 }
