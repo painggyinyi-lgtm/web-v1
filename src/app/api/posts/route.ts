@@ -2,32 +2,57 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-// Post အားလုံးကို ယူမယ် (Comments ရော၊ Like Count ရော၊ ကိုယ်တိုင် Like ထားသလားပါ စစ်မယ်)
+// GET: Post တွေဆွဲမယ် + Online User Count တွက်မယ်
 export async function GET(request: NextRequest) {
-  const db = (process.env as any).DB;
+  const env = process.env as any;
+  const db = env.DB;
+  const KV = env.ONLINE_USERS_KV; // KV ကို လှမ်းယူတယ်
+  
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
 
-  const { results: posts } = await db.prepare(`
-    SELECT p.*, 
-    (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
-    (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id AND user_ip = ?) > 0 as isLiked
-    FROM posts p 
-    ORDER BY created_at DESC
-  `).bind(userIp).all();
-  
-  const postsWithComments = await Promise.all(posts.map(async (post: any) => {
-    const { results: comments } = await db.prepare('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC')
-      .bind(post.id).all();
-    return { ...post, comments };
-  }));
+  try {
+    // --- Online User Tracking Logic ---
+    if (KV) {
+      // ၁။ လက်ရှိ User ရဲ့ IP ကို KV ထဲမှာ Online ဖြစ်နေကြောင်း မှတ်မယ် (သက်တမ်း ၆၀ စက္ကန့်)
+      await KV.put(`online:${userIp}`, Date.now().toString(), { expirationTtl: 60 });
+    }
 
-  return NextResponse.json(postsWithComments);
+    // ၂။ Online ဖြစ်နေတဲ့ User Key အားလုံးကို List လုပ်မယ်
+    const onlineList = KV ? await KV.list({ prefix: "online:" }) : { keys: [] };
+    const onlineCount = onlineList.keys.length;
+
+    // --- Original Database Logic ---
+    const { results: posts } = await db.prepare(`
+      SELECT p.*, 
+      (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
+      (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id AND user_ip = ?) > 0 as isLiked
+      FROM posts p 
+      ORDER BY created_at DESC
+    `).bind(userIp).all();
+    
+    const postsWithComments = await Promise.all(posts.map(async (post: any) => {
+      const { results: comments } = await db.prepare('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC')
+        .bind(post.id).all();
+      return { ...post, comments };
+    }));
+
+    // Posts data ရော onlineCount ကိုပါ တစ်ခါတည်း ပြန်ပို့မယ်
+    return NextResponse.json({
+      posts: postsWithComments,
+      onlineCount: onlineCount || 1 // အနည်းဆုံး ၁ ယောက် (ကိုယ်တိုင်) ပြထားမယ်
+    });
+
+  } catch (error: any) {
+    console.error("GET Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
 
-// Post သို့မဟုတ် Comment အသစ်တင်မယ်
+// POST: Post သို့မဟုတ် Comment အသစ်တင်မယ်
 export async function POST(request: NextRequest) {
-  const db = (process.env as any).DB;
-  const bucket = (process.env as any).MY_BUCKET;
+  const env = process.env as any;
+  const db = env.DB;
+  const bucket = env.MY_BUCKET;
 
   try {
     const formData = await request.formData();
@@ -53,8 +78,8 @@ export async function POST(request: NextRequest) {
       media_type = file.type;
     }
 
-    await db.prepare('INSERT INTO posts (content, media_url, media_type) VALUES (?, ?, ?)')
-      .bind(content, media_url, media_type).run();
+    await db.prepare('INSERT INTO posts (content, media_url, media_type, created_at) VALUES (?, ?, ?, ?)')
+      .bind(content, media_url, media_type, new Date().toISOString()).run();
 
     return NextResponse.json({ success: true, message: "Post created" });
 
@@ -64,7 +89,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Like Logic
+// PATCH: Like Logic
 export async function PATCH(request: NextRequest) {
   const db = (process.env as any).DB;
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
@@ -87,21 +112,18 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// --- ပြင်ဆင်ထားသော DELETE PART (Admin Only) ---
+// DELETE: Admin Only
 export async function DELETE(request: NextRequest) {
   const db = (process.env as any).DB;
   
   try {
     const { id, adminKey } = await request.json();
-    
-    // ဒီနေရာမှာ အစ်ကို့စိတ်ကြိုက် password ပြောင်းနိုင်ပါတယ်
     const MASTER_ADMIN_KEY = "232003"; 
 
     if (adminKey !== MASTER_ADMIN_KEY) {
       return NextResponse.json({ success: false, message: "Admin Key မှားယွင်းနေပါသည်" }, { status: 401 });
     }
 
-    // Database မှ ဖျက်ခြင်း
     await db.prepare('DELETE FROM post_likes WHERE post_id = ?').bind(id).run();
     await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
     await db.prepare('DELETE FROM comments WHERE post_id = ?').bind(id).run();

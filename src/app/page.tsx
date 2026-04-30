@@ -7,6 +7,7 @@ const R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev";
 export default function Home() {
   const [content, setContent] = useState("");
   const [posts, setPosts] = useState<any[]>([]);
+  const [onlineCount, setOnlineCount] = useState<number>(1); // Online User Count State
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [commentInputs, setCommentInputs] = useState<{ [key: number]: string }>({});
@@ -33,7 +34,14 @@ export default function Home() {
     try {
       const res = await fetch("/api/posts");
       const data = await res.json();
-      if (Array.isArray(data)) setPosts(data);
+      
+      // API အသစ်မှာ data.posts နဲ့ data.onlineCount ဆိုပြီး လာမှာဖြစ်လို့ အောက်ကလို ခွဲယူရပါမယ်
+      if (data.posts && Array.isArray(data.posts)) {
+        setPosts(data.posts);
+      }
+      if (data.onlineCount !== undefined) {
+        setOnlineCount(data.onlineCount);
+      }
     } catch (error) {
       console.error("Fetch error:", error);
     }
@@ -41,7 +49,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchPosts();
-    const interval = setInterval(fetchPosts, 5000);
+    const interval = setInterval(fetchPosts, 10000); // 10 စက္ကန့်တစ်ခါ update လုပ်မယ်
     return () => clearInterval(interval);
   }, []);
 
@@ -130,19 +138,14 @@ export default function Home() {
     fetchPosts();
   };
 
-  // --- ပြင်ဆင်ထားသော DELETE LOGIC ---
   const handleDelete = async (id: number) => {
-    // ၁။ Admin Key ကို prompt နဲ့ အရင်တောင်းမယ်
     const adminKey = prompt("ဒီပို့စ်ကို ဖျက်ဖို့ Admin Key ရိုက်ထည့်ပါ -");
-    
-    // Cancel နှိပ်ရင် ဘာမှမလုပ်ဘူး
     if (adminKey === null) return;
 
     try {
       const response = await fetch("/api/posts", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        // ၂။ id ရော adminKey ရောကို body ထဲထည့်ပြီး ပို့မယ်
         body: JSON.stringify({ id, adminKey }), 
       });
       
@@ -152,7 +155,6 @@ export default function Home() {
         alert("ဖျက်သိမ်းပြီးပါပြီ");
         fetchPosts();
       } else {
-        // Admin Key မှားရင် API ဘက်ကပို့တဲ့ message ကို ပြမယ်
         alert(result.message || "Key မှားနေသဖြင့် ဖျက်လို့မရပါ");
       }
     } catch (error) {
@@ -184,13 +186,24 @@ export default function Home() {
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] text-slate-100' : 'bg-[#f8fafc] text-slate-900'}`}>
       <nav className={`sticky top-0 z-50 border-b transition-colors duration-300 ${darkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200/60'} backdrop-blur-md`}>
         <div className="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-xl shadow-blue-500/20">
               <span className="text-white font-black text-xl italic">K</span>
             </div>
-            <h1 className="text-xl font-black tracking-tighter">ANON <span className="text-blue-500 text-[10px] tracking-normal font-bold bg-blue-500/10 px-2 py-0.5 rounded-full ml-1">v 1.0</span></h1>
+            <div>
+               <h1 className="text-xl font-black tracking-tighter flex items-center gap-1">
+                 ANON <span className="text-blue-500 text-[10px] tracking-normal font-bold bg-blue-500/10 px-2 py-0.5 rounded-full">v 1.0</span>
+               </h1>
+               {/* Online User Count Display */}
+               <div className="flex items-center gap-1.5 mt-[-2px]">
+                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                 <span className="text-[9px] font-black uppercase text-green-500 tracking-wider">
+                   {onlineCount} Users Online
+                 </span>
+               </div>
+            </div>
           </div>
-          <button onClick={toggleTheme} className={`p-2.5 rounded-2xl border transition-all active:scale-90 ${darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400 shadow-lg' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+          <button onClick={toggleTheme} className={`p-2.5 rounded-2xl border transition-all active:scale-90 flex items-center gap-2 text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400 shadow-lg' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
             {darkMode ? "☀️ Light" : "🌙 Dark"}
           </button>
         </div>
@@ -240,10 +253,11 @@ export default function Home() {
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-700 to-slate-800 flex items-center justify-center text-xl font-black text-blue-500">U</div>
                   <div>
                     <p className="font-black text-[15px]">Anonymous User</p>
-                    <p className="text-[10px] opacity-50 font-bold uppercase tracking-tighter">{new Date(post.created_at).toLocaleTimeString()}</p>
+                    <p className="text-[10px] opacity-50 font-bold uppercase tracking-tighter">
+                      {post.created_at ? new Date(post.created_at).toLocaleTimeString() : 'Just now'}
+                    </p>
                   </div>
                 </div>
-                {/* Delete Button */}
                 <button onClick={() => handleDelete(post.id)} className="text-slate-500 hover:text-red-500 transition-colors">🗑️</button>
               </div>
 
@@ -260,7 +274,7 @@ export default function Home() {
               )}
 
               <div className="flex items-center gap-6 pt-5 border-t border-slate-100 dark:border-slate-800">
-                <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 font-bold text-sm ${post.isLiked ? 'text-blue-500' : ''}`}>
+                <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 font-bold text-sm transition-colors ${post.isLiked ? 'text-blue-500' : ''}`}>
                   {post.isLiked ? '💙' : '👍'} {post.likes || 0}
                 </button>
                 <button onClick={() => toggleCommentBox(post.id)} className="flex items-center gap-2 font-bold text-sm">💬 {post.comments?.length || 0}</button>
@@ -268,7 +282,7 @@ export default function Home() {
               </div>
 
               {activeCommentBox[post.id] && (
-                <div className="mt-6 flex gap-3">
+                <div className="mt-6 flex gap-3 animate-in fade-in slide-in-from-top-2">
                   <input 
                     className={`flex-1 px-5 py-3 rounded-2xl text-sm font-medium outline-none border ${darkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-100 border-transparent'}`}
                     placeholder="မှတ်ချက်ပေးရန်..."
@@ -276,7 +290,7 @@ export default function Home() {
                     onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
                     onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
                   />
-                  <button onClick={() => handleCommentSubmit(post.id)} className="w-12 h-12 flex items-center justify-center bg-blue-600 text-white rounded-2xl">🚀</button>
+                  <button onClick={() => handleCommentSubmit(post.id)} className="w-12 h-12 flex items-center justify-center bg-blue-600 text-white rounded-2xl hover:bg-blue-500 transition-colors">🚀</button>
                 </div>
               )}
 
