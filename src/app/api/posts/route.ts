@@ -2,30 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-// GET: Post တွေဆွဲမယ် + Online User Count တွက်မယ်
+// GET: Post တွေဆွဲမယ် + Online User Count + Reactions ယူမယ်
 export async function GET(request: NextRequest) {
   const env = process.env as any;
   const db = env.DB;
-  const KV = env.ONLINE_USERS_KV; // KV ကို လှမ်းယူတယ်
+  const KV = env.ONLINE_USERS_KV;
   
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
 
   try {
-    // --- Online User Tracking Logic ---
+    // 1. Online User Tracking
     if (KV) {
-      // ၁။ လက်ရှိ User ရဲ့ IP ကို KV ထဲမှာ Online ဖြစ်နေကြောင်း မှတ်မယ် (သက်တမ်း ၆၀ စက္ကန့်)
       await KV.put(`online:${userIp}`, Date.now().toString(), { expirationTtl: 60 });
     }
-
-    // ၂။ Online ဖြစ်နေတဲ့ User Key အားလုံးကို List လုပ်မယ်
     const onlineList = KV ? await KV.list({ prefix: "online:" }) : { keys: [] };
     const onlineCount = onlineList.keys.length;
 
-    // --- Original Database Logic ---
+    // 2. Database Logic (reaction_type ပါ ဆွဲထုတ်မယ်)
     const { results: posts } = await db.prepare(`
       SELECT p.*, 
       (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
-      (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id AND user_ip = ?) > 0 as isLiked
+      (SELECT reaction_type FROM post_likes WHERE post_id = p.id AND user_ip = ? LIMIT 1) as myReaction
       FROM posts p 
       ORDER BY created_at DESC
     `).bind(userIp).all();
@@ -33,13 +30,19 @@ export async function GET(request: NextRequest) {
     const postsWithComments = await Promise.all(posts.map(async (post: any) => {
       const { results: comments } = await db.prepare('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC')
         .bind(post.id).all();
-      return { ...post, comments };
+      
+      // isLiked ကို myReaction ရှိမရှိနဲ့ စစ်မယ်
+      return { 
+        ...post, 
+        comments, 
+        isLiked: !!post.myReaction,
+        reaction_type: post.myReaction || null 
+      };
     }));
 
-    // Posts data ရော onlineCount ကိုပါ တစ်ခါတည်း ပြန်ပို့မယ်
     return NextResponse.json({
       posts: postsWithComments,
-      onlineCount: onlineCount || 1 // အနည်းဆုံး ၁ ယောက် (ကိုယ်တိုင်) ပြထားမယ်
+      onlineCount: onlineCount || 1
     });
 
   } catch (error: any) {
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Post သို့မဟုတ် Comment အသစ်တင်မယ်
+// POST: Post/Comment တင်မယ် (နဂိုအတိုင်းပဲ)
 export async function POST(request: NextRequest) {
   const env = process.env as any;
   const db = env.DB;
@@ -82,40 +85,49 @@ export async function POST(request: NextRequest) {
       .bind(content, media_url, media_type, new Date().toISOString()).run();
 
     return NextResponse.json({ success: true, message: "Post created" });
-
   } catch (error) {
-    console.error("Upload error:", error);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }
 }
 
-// PATCH: Like Logic
+// PATCH: Multi-Reaction Logic (အသစ်ပြင်ထားတာ)
 export async function PATCH(request: NextRequest) {
   const db = (process.env as any).DB;
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
-  const { id } = await request.json();
   
   try {
-    const existingLike = await db.prepare(
-      "SELECT id FROM post_likes WHERE post_id = ? AND user_ip = ?"
+    const { id, reactionType = 'like' } = await request.json();
+    
+    // ရှိပြီးသား reaction ကို စစ်မယ်
+    const existing = await db.prepare(
+      "SELECT reaction_type FROM post_likes WHERE post_id = ? AND user_ip = ?"
     ).bind(id, userIp).first();
 
-    if (existingLike) {
-      await db.prepare("DELETE FROM post_likes WHERE post_id = ? AND user_ip = ?").bind(id, userIp).run();
-      return NextResponse.json({ success: true, liked: false });
+    if (existing) {
+      if (existing.reaction_type === reactionType) {
+        // reaction တူရင် ပြန်ဖြုတ်မယ် (Unlike)
+        await db.prepare("DELETE FROM post_likes WHERE post_id = ? AND user_ip = ?").bind(id, userIp).run();
+        return NextResponse.json({ success: true, reacted: false });
+      } else {
+        // reaction မတူရင် အမျိုးအစား ပြောင်းမယ်
+        await db.prepare("UPDATE post_likes SET reaction_type = ? WHERE post_id = ? AND user_ip = ?")
+          .bind(reactionType, id, userIp).run();
+        return NextResponse.json({ success: true, reacted: true, type: reactionType });
+      }
     } else {
-      await db.prepare("INSERT INTO post_likes (post_id, user_ip) VALUES (?, ?)").bind(id, userIp).run();
-      return NextResponse.json({ success: true, liked: true });
+      // အသစ်ထည့်မယ်
+      await db.prepare("INSERT INTO post_likes (post_id, user_ip, reaction_type) VALUES (?, ?, ?)")
+        .bind(id, userIp, reactionType).run();
+      return NextResponse.json({ success: true, reacted: true, type: reactionType });
     }
   } catch (e) {
     return NextResponse.json({ success: false, error: "Database error" }, { status: 500 });
   }
 }
 
-// DELETE: Admin Only
+// DELETE: Admin Only (နဂိုအတိုင်းပဲ)
 export async function DELETE(request: NextRequest) {
   const db = (process.env as any).DB;
-  
   try {
     const { id, adminKey } = await request.json();
     const MASTER_ADMIN_KEY = "232003"; 
