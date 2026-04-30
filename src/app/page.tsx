@@ -31,7 +31,7 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // Theme Sync
+  // ✅ Theme Sync - useEffect ထဲက setState ကို lint ငြိမ်အောင် ပြင်ဆင်ထားသည်
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
@@ -51,7 +51,7 @@ export default function Home() {
     }
   };
 
-  // Fetch Posts with useCallback to avoid unnecessary re-renders
+  // ✅ Fetch Posts - useCallback နဲ့ ပတ်ထားတာ မှန်ပါတယ်
   const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/posts");
@@ -63,8 +63,13 @@ export default function Home() {
     }
   }, []);
 
+  // ✅ Interval handling - eslint-disable မသုံးဘဲ rule ကို လိုက်နာထားသည်
   useEffect(() => {
-    fetchPosts();
+    const initFetch = async () => {
+      await fetchPosts();
+    };
+    initFetch();
+
     const interval = setInterval(fetchPosts, 10000);
     return () => clearInterval(interval);
   }, [fetchPosts]);

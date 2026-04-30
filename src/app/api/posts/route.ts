@@ -152,7 +152,9 @@ export async function PATCH(request: NextRequest) {
       await db.prepare("INSERT INTO post_likes (post_id, user_ip, reaction_type) VALUES (?, ?, ?)").bind(id, userIp, reactionType).run();
       return NextResponse.json({ success: true, reacted: true, type: reactionType });
     }
-  } catch (e: any) {
+  } catch (error: any) {
+    // catch ထဲမှာ error ကို log ထုတ်လိုက်ခြင်းဖြင့် unused variable error ကင်းဝေးစေသည်
+    console.error("Reaction Update Error:", error);
     return NextResponse.json({ success: false, error: "Database error" }, { status: 500 });
   }
 }
