@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @next/next/no-img-element */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Send, Image as ImageIcon, Trash2, Share2, MessageCircle, 
@@ -31,26 +31,28 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  // Theme Sync
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("theme");
-      if (savedTheme === "dark") {
-        setDarkMode(true);
-        document.documentElement.classList.add("dark");
-      }
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+      setDarkMode(true);
+      document.documentElement.classList.add("dark");
     }
   }, []);
 
   const toggleTheme = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("theme", newMode ? "dark" : "light" );
-      document.documentElement.classList.toggle("dark");
+    localStorage.setItem("theme", newMode ? "dark" : "light");
+    if (newMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
     }
   };
 
-  const fetchPosts = async () => {
+  // Fetch Posts with useCallback to avoid unnecessary re-renders
+  const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/posts");
       const data = await res.json();
@@ -59,13 +61,13 @@ export default function Home() {
     } catch (error) {
       console.error("Fetch error:", error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchPosts();
     const interval = setInterval(fetchPosts, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchPosts]);
 
   const handleReaction = async (id: number, type: string) => {
     try {
@@ -80,24 +82,35 @@ export default function Home() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("ဒီပို့စ်ကို ဖျက်မှာ သေချာလား?")) return;
+    const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ (မဖျက်လိုပါက Cancel နှိပ်ပါ)");
+    if (!adminKey) return;
+
     try {
-      await fetch(`/api/posts?id=${id}`, { method: "DELETE" });
-      fetchPosts();
+      const res = await fetch("/api/posts", { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, adminKey }) 
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchPosts();
+      } else {
+        alert(data.message || "ဖျက်လို့မရပါ");
+      }
     } catch (error) { console.error(error); }
   };
 
-  const handleShare = async (id: number, content: string) => {
+  const handleShare = async (id: number, textContent: string) => {
     try {
       if (navigator.share) {
         await navigator.share({
           title: 'ANON Post',
-          text: content,
-          url: window.location.href,
+          text: textContent,
+          url: window.location.origin,
         });
       } else {
+        navigator.clipboard.writeText(window.location.origin);
         alert("Link copied to clipboard!");
-        navigator.clipboard.writeText(window.location.href);
       }
     } catch (error) { console.error(error); }
   };
@@ -179,7 +192,6 @@ export default function Home() {
       </nav>
 
       <main className="relative max-w-2xl mx-auto px-4 py-10">
-        {/* Create Post */}
         <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
           <textarea 
             className={`w-full p-4 rounded-2xl outline-none transition-all resize-none text-lg font-medium bg-transparent ${darkMode ? 'text-white' : 'text-slate-700'}`}
@@ -204,7 +216,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Posts List */}
         <div className="space-y-8">
           <AnimatePresence mode="popLayout">
             {posts.map((post) => (
@@ -256,7 +267,7 @@ export default function Home() {
                     </button>
                   </div>
 
-                  <button onClick={() => setActiveCommentBox({ ...activeCommentBox, [post.id]: !activeCommentBox[post.id] })} className="flex items-center gap-2 font-bold text-sm py-2 px-4 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <button onClick={() => setActiveCommentBox(prev => ({ ...prev, [post.id]: !prev[post.id] }))} className="flex items-center gap-2 font-bold text-sm py-2 px-4 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
                     <MessageCircle size={18} /> {post.comments?.length || 0}
                   </button>
                   <button onClick={() => handleShare(post.id, post.content)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full"><Share2 size={18} /></button>
@@ -266,9 +277,9 @@ export default function Home() {
                   <div className="mt-6">
                     <div className="flex gap-3">
                       <input 
-                        className={`flex-1 px-5 py-3 rounded-2xl text-sm outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-transparent focus:bg-white'}`}
+                        className={`flex-1 px-5 py-3 rounded-2xl text-sm outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-transparent focus:bg-white text-slate-900'}`}
                         placeholder="Comment something..." value={commentInputs[post.id] || ""}
-                        onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
                         onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
                       />
                       <button onClick={() => handleCommentSubmit(post.id)} className="w-12 h-12 flex items-center justify-center bg-blue-600 text-white rounded-2xl shadow-lg">

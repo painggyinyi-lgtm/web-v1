@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
 // HTML Tag များကို ဖယ်ရှားရန် (XSS Attack ကာကွယ်ရေး)
-function sanitizeInput(text: string) {
+function sanitizeInput(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -69,11 +70,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const rawContent = formData.get('content') as string || "";
+    const rawContent = (formData.get('content') as string) || "";
     const post_id = formData.get('post_id') as string | null;
     const file = formData.get('file') as File | null;
 
-    // XSS ကာကွယ်ရန် စာသားကို သန့်စင်မည်
     const content = sanitizeInput(rawContent);
 
     if (!content.trim() && !file) {
@@ -84,7 +84,8 @@ export async function POST(request: NextRequest) {
     if (KV) {
       if (post_id) {
         const commentLimitKey = `limit:comment:${userIp}`;
-        const currentCount = parseInt(await KV.get(commentLimitKey) || "0");
+        const kvVal = await KV.get(commentLimitKey);
+        const currentCount = parseInt(kvVal || "0");
         if (currentCount >= 3) {
           return NextResponse.json({ error: "မကြာခဏ Comment ပေးခြင်းမှ ခဏနားပါ" }, { status: 429 });
         }
@@ -99,19 +100,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Comment တင်ခြင်း
     if (post_id) {
       await db.prepare('INSERT INTO comments (post_id, content, created_at) VALUES (?, ?, ?)')
         .bind(post_id, content, new Date().toISOString()).run();
       return NextResponse.json({ success: true, message: "Comment added" });
     } 
 
-    // Post တင်ခြင်း + Media
     let media_url = null;
     let media_type = null;
 
     if (file && file.size > 0) {
-      // File Size Limit: 5MB
       if (file.size > 5 * 1024 * 1024) {
         return NextResponse.json({ error: "ဖိုင်ဆိုဒ် 5MB ထက် မကျော်ရပါ" }, { status: 400 });
       }
@@ -127,8 +125,8 @@ export async function POST(request: NextRequest) {
       .bind(content, media_url, media_type, new Date().toISOString()).run();
 
     return NextResponse.json({ success: true, message: "Post created" });
-  } catch (error) {
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Something went wrong" }, { status: 500 });
   }
 }
 
@@ -138,7 +136,8 @@ export async function PATCH(request: NextRequest) {
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
   
   try {
-    const { id, reactionType = 'like' } = await request.json();
+    const body = await request.json();
+    const { id, reactionType = 'like' } = body;
     const existing = await db.prepare("SELECT reaction_type FROM post_likes WHERE post_id = ? AND user_ip = ?").bind(id, userIp).first();
 
     if (existing) {
@@ -153,7 +152,7 @@ export async function PATCH(request: NextRequest) {
       await db.prepare("INSERT INTO post_likes (post_id, user_ip, reaction_type) VALUES (?, ?, ?)").bind(id, userIp, reactionType).run();
       return NextResponse.json({ success: true, reacted: true, type: reactionType });
     }
-  } catch (e) {
+  } catch (e: any) {
     return NextResponse.json({ success: false, error: "Database error" }, { status: 500 });
   }
 }
@@ -165,22 +164,18 @@ export async function DELETE(request: NextRequest) {
   
   try {
     const { id, adminKey } = await request.json();
-    
-    // Cloudflare Dashboard > Settings > Variables မှာ ADMIN_KEY ကို သတ်မှတ်ထားပေးပါ။
-    // သတ်မှတ်မထားရင် default အနေနဲ့ "232003" ကို သုံးပါမယ်။
     const MASTER_ADMIN_KEY = env.ADMIN_KEY || "232003"; 
 
     if (adminKey !== MASTER_ADMIN_KEY) {
       return NextResponse.json({ success: false, message: "Admin Key မှားယွင်းနေပါသည်" }, { status: 401 });
     }
 
-    // Post နဲ့ သက်ဆိုင်တာတွေ အကုန်ဖျက်မယ်
     await db.prepare('DELETE FROM post_likes WHERE post_id = ?').bind(id).run();
     await db.prepare('DELETE FROM comments WHERE post_id = ?').bind(id).run();
     await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
     
     return NextResponse.json({ success: true, message: "Deleted successfully" });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: "Failed to delete" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message || "Failed to delete" }, { status: 500 });
   }
 }
