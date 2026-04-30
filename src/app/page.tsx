@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Send, Image as ImageIcon, Trash2, Share2, MessageCircle, 
-  Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap 
+  Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap, MessageSquare
 } from "lucide-react";
 
 const R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"; 
@@ -31,7 +31,11 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // ✅ Theme Sync - useEffect ထဲက setState ကို lint ငြိမ်အောင် ပြင်ဆင်ထားသည်
+  // New Feedback States
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
@@ -51,7 +55,6 @@ export default function Home() {
     }
   };
 
-  // ✅ Fetch Posts - useCallback နဲ့ ပတ်ထားတာ မှန်ပါတယ်
   const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/posts");
@@ -63,13 +66,8 @@ export default function Home() {
     }
   }, []);
 
-  // ✅ Interval handling - eslint-disable မသုံးဘဲ rule ကို လိုက်နာထားသည်
   useEffect(() => {
-    const initFetch = async () => {
-      await fetchPosts();
-    };
-    initFetch();
-
+    fetchPosts();
     const interval = setInterval(fetchPosts, 10000);
     return () => clearInterval(interval);
   }, [fetchPosts]);
@@ -86,10 +84,34 @@ export default function Home() {
     } catch (error) { console.error(error); }
   };
 
-  const handleDelete = async (id: number) => {
-    const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ (မဖျက်လိုပါက Cancel နှိပ်ပါ)");
-    if (!adminKey) return;
+  const submitFeedback = async () => {
+    if (!feedbackText.trim() || feedbackText.length < 5) {
+      alert("Feedback ကို အနည်းဆုံး စာလုံး ၅ လုံး ရေးပေးပါ");
+      return;
+    }
+    setIsSubmittingFeedback(true);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: feedbackText }),
+      });
+      if (res.ok) {
+        alert("ကျေးဇူးတင်ပါတယ်! Feedback ရရှိပါပြီ။");
+        setFeedbackText("");
+        setShowFeedback(false);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("ပို့လို့မရပါ၊ ခဏနေမှ ပြန်ကြိုးစားကြည့်ပါ");
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
 
+  const handleDelete = async (id: number) => {
+    const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ");
+    if (!adminKey) return;
     try {
       const res = await fetch("/api/posts", { 
         method: "DELETE",
@@ -97,25 +119,18 @@ export default function Home() {
         body: JSON.stringify({ id, adminKey }) 
       });
       const data = await res.json();
-      if (data.success) {
-        fetchPosts();
-      } else {
-        alert(data.message || "ဖျက်လို့မရပါ");
-      }
+      if (data.success) fetchPosts();
+      else alert(data.message || "Error");
     } catch (error) { console.error(error); }
   };
 
   const handleShare = async (id: number, textContent: string) => {
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: 'ANON Post',
-          text: textContent,
-          url: window.location.origin,
-        });
+        await navigator.share({ title: 'ANON Post', text: textContent, url: window.location.origin });
       } else {
         navigator.clipboard.writeText(window.location.origin);
-        alert("Link copied to clipboard!");
+        alert("Link copied!");
       }
     } catch (error) { console.error(error); }
   };
@@ -134,7 +149,6 @@ export default function Home() {
     const formData = new FormData();
     formData.append("content", content);
     if (selectedFile) formData.append("file", selectedFile);
-
     try {
       const response = await fetch("/api/posts", { method: "POST", body: formData });
       if (response.ok) {
@@ -143,11 +157,7 @@ export default function Home() {
         setPreviewUrl(null);
         fetchPosts();
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
   const handleCommentSubmit = async (postId: number) => {
@@ -156,7 +166,6 @@ export default function Home() {
     const formData = new FormData();
     formData.append("post_id", postId.toString());
     formData.append("content", commentText);
-
     try {
       const response = await fetch("/api/posts", { method: "POST", body: formData });
       if (response.ok) {
@@ -305,6 +314,55 @@ export default function Home() {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Floating Feedback Button */}
+      <button 
+        onClick={() => setShowFeedback(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40"
+      >
+        <MessageSquare size={24} />
+      </button>
+
+      {/* Feedback Modal */}
+      <AnimatePresence>
+        {showFeedback && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={`w-full max-w-md p-8 rounded-[32px] border shadow-2xl ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
+            >
+              <h3 className="text-2xl font-black mb-2">Feedback</h3>
+              <p className="text-sm opacity-60 mb-6 font-medium">ကျွန်တော်တို့ Web ကို ပိုကောင်းအောင် ဘာတွေ ပြင်စေချင်လဲ။</p>
+              
+              <textarea 
+                className={`w-full p-5 rounded-2xl outline-none border transition-all resize-none font-medium ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500' : 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 text-slate-900 shadow-inner'}`}
+                placeholder="ဒီမှာ ရေးပေးပါ..."
+                rows={4}
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+              />
+              
+              <div className="flex gap-3 mt-8">
+                <button 
+                  onClick={() => setShowFeedback(false)}
+                  className="flex-1 py-4 rounded-2xl font-bold opacity-50 hover:opacity-100 transition-opacity"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={submitFeedback}
+                  disabled={isSubmittingFeedback}
+                  className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-500/30 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSubmittingFeedback ? "Sending..." : "Submit"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <footer className="py-20 text-center">
         <p className="text-[10px] font-black uppercase tracking-[0.8em] opacity-20">
