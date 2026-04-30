@@ -30,13 +30,14 @@ export async function GET(request: NextRequest) {
     const onlineCount = onlineList.keys.length;
 
     // 2. Database Logic
-    const { results: posts } = await db.prepare(`
-      SELECT p.*, 
-      (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
-      (SELECT reaction_type FROM post_likes WHERE post_id = p.id AND user_ip = ? LIMIT 1) as myReaction
-      FROM posts p 
-      ORDER BY created_at DESC
-    `).bind(userIp).all();
+    // GET function ထဲက database query နေရာမှာ ဒါလေးနဲ့ အစားထိုးပါ
+const { results: posts } = await db.prepare(`
+  SELECT p.*, 
+  (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
+  (SELECT reaction_type FROM post_likes WHERE post_id = p.id AND user_ip = ? LIMIT 1) as myReaction
+  FROM posts p 
+  ORDER BY is_pinned DESC, created_at DESC
+`).bind(userIp).all();
     
     const postsWithComments = await Promise.all(posts.map(async (post: any) => {
       const { results: comments } = await db.prepare('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC')
