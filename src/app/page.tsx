@@ -31,7 +31,6 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // Feedback States
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
@@ -58,9 +57,7 @@ export default function Home() {
       const data = await res.json();
       if (data.posts) setPosts(data.posts);
       if (data.onlineCount) setOnlineCount(data.onlineCount);
-    } catch (error) {
-      console.error("Fetch error:", error);
-    }
+    } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
   useEffect(() => {
@@ -68,6 +65,23 @@ export default function Home() {
     const interval = setInterval(fetchPosts, 10000);
     return () => clearInterval(interval);
   }, [fetchPosts]);
+
+  const handlePin = async (id: number) => {
+    const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ (Pin/Unpin လုပ်ရန်)");
+    if (!adminKey) return;
+    try {
+      const res = await fetch("/api/posts", { 
+        method: "PATCH", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, adminKey }) 
+      });
+      if (res.ok) fetchPosts();
+      else {
+        const err = await res.json();
+        alert(err.message || "Error");
+      }
+    } catch (error) { console.error(error); }
+  };
 
   const handleReaction = async (id: number, type: string) => {
     try {
@@ -183,7 +197,6 @@ export default function Home() {
       </nav>
 
       <main className="relative max-w-2xl mx-auto px-4 py-10">
-        {/* Create Post Area */}
         <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
           <textarea 
             className={`w-full p-4 rounded-2xl outline-none transition-all resize-none text-lg font-medium bg-transparent ${darkMode ? 'text-white' : 'text-slate-700'}`}
@@ -209,7 +222,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Posts Feed */}
         <div className="space-y-8">
           <AnimatePresence mode="popLayout">
             {posts.map((post) => (
@@ -225,7 +237,6 @@ export default function Home() {
                   : (darkMode ? 'bg-slate-900/40 border-slate-800/50' : 'bg-white border-slate-100')
                 }`}
               >
-                {/* Pin Badge */}
                 {post.is_pinned && (
                   <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-full flex items-center gap-1.5 shadow-xl shadow-indigo-500/40 z-10 border border-indigo-400">
                     <Zap size={12} fill="currentColor" /> FEATURED POST
@@ -242,7 +253,13 @@ export default function Home() {
                       <p className="text-[10px] opacity-40 font-bold uppercase">{new Date(post.created_at).toLocaleString()}</p>
                     </div>
                   </div>
-                  <button onClick={() => handleDelete(post.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                  <div className="flex items-center gap-1">
+                    {/* Pin/Unpin Button */}
+                    <button onClick={() => handlePin(post.id)} className={`p-2 transition-colors ${post.is_pinned ? 'text-yellow-400' : 'text-slate-400 hover:text-yellow-500'}`}>
+                      <Zap size={18} fill={post.is_pinned ? "currentColor" : "none"} />
+                    </button>
+                    <button onClick={() => handleDelete(post.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                  </div>
                 </div>
 
                 <p className={`text-[17px] mb-6 whitespace-pre-wrap leading-relaxed ${post.is_pinned ? 'font-medium text-white' : ''}`}>{post.content}</p>
@@ -309,12 +326,10 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Floating Feedback Button */}
       <button onClick={() => setShowFeedback(true)} className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white dark:border-slate-900">
         <MessageSquare size={26} />
       </button>
 
-      {/* Feedback Modal */}
       <AnimatePresence>
         {showFeedback && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
