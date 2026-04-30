@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
+// HTML Tag များကို ဖယ်ရှားရန် (XSS Attack ကာကွယ်ရေး)
+function sanitizeInput(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // GET: Post တွေဆွဲမယ် + Online User Count + Reactions ယူမယ်
 export async function GET(request: NextRequest) {
   const env = process.env as any;
@@ -11,7 +21,7 @@ export async function GET(request: NextRequest) {
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
 
   try {
-    // 1. Online User Tracking (၁ မိနစ်စာ သိမ်းမယ်)
+    // 1. Online User Tracking
     if (KV) {
       await KV.put(`online:${userIp}`, Date.now().toString(), { expirationTtl: 60 });
     }
@@ -59,16 +69,20 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const content = formData.get('content') as string;
+    const rawContent = formData.get('content') as string || "";
     const post_id = formData.get('post_id') as string | null;
     const file = formData.get('file') as File | null;
 
-    if (!content && !file) return NextResponse.json({ error: "စာသား သို့မဟုတ် ပုံ ထည့်ပါ" }, { status: 400 });
+    // XSS ကာကွယ်ရန် စာသားကို သန့်စင်မည်
+    const content = sanitizeInput(rawContent);
 
-    // --- RATE LIMITING LOGIC (KV ကို သုံးထားတယ်) ---
+    if (!content.trim() && !file) {
+      return NextResponse.json({ error: "စာသား သို့မဟုတ် ပုံ ထည့်ပါ" }, { status: 400 });
+    }
+
+    // --- RATE LIMITING ---
     if (KV) {
       if (post_id) {
-        // Comment Limit: ၁ မိနစ် ၃ ခု
         const commentLimitKey = `limit:comment:${userIp}`;
         const currentCount = parseInt(await KV.get(commentLimitKey) || "0");
         if (currentCount >= 3) {
@@ -76,13 +90,12 @@ export async function POST(request: NextRequest) {
         }
         await KV.put(commentLimitKey, (currentCount + 1).toString(), { expirationTtl: 60 });
       } else {
-        // Post Limit: ၅ မိနစ် ၁ ခု
         const postLimitKey = `limit:post:${userIp}`;
         const alreadyPosted = await KV.get(postLimitKey);
         if (alreadyPosted) {
           return NextResponse.json({ error: "၅ မိနစ်လျှင် တစ်ကြိမ်သာ Post တင်နိုင်ပါသည်" }, { status: 429 });
         }
-        await KV.put(postLimitKey, "true", { expirationTtl: 300 }); // 300s = 5 mins
+        await KV.put(postLimitKey, "true", { expirationTtl: 300 });
       }
     }
 
@@ -98,6 +111,10 @@ export async function POST(request: NextRequest) {
     let media_type = null;
 
     if (file && file.size > 0) {
+      // File Size Limit: 5MB
+      if (file.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "ဖိုင်ဆိုဒ် 5MB ထက် မကျော်ရပါ" }, { status: 400 });
+      }
       const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
       await bucket.put(fileName, file.stream(), {
         httpMetadata: { contentType: file.type }
@@ -115,7 +132,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH: Multi-Reaction Logic (နဂိုအတိုင်း)
+// PATCH: Reactions
 export async function PATCH(request: NextRequest) {
   const db = (process.env as any).DB;
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
@@ -141,24 +158,26 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// DELETE: Admin Only (လုံခြုံရေး ပိုကောင်းအောင် ပြင်ထားတယ်)
+// DELETE: Admin Key Fixed
 export async function DELETE(request: NextRequest) {
-  const db = (process.env as any).DB;
   const env = process.env as any;
+  const db = env.DB;
+  
   try {
     const { id, adminKey } = await request.json();
     
-    // Cloudflare Variables ထဲမှာ ADMIN_KEY ဆိုပြီး သတ်မှတ်ထားရင် ပိုကောင်းပါတယ်။ 
-    // မရှိရင် default အနေနဲ့ "232003" ကို သုံးထားမယ်။
+    // Cloudflare Dashboard > Settings > Variables မှာ ADMIN_KEY ကို သတ်မှတ်ထားပေးပါ။
+    // သတ်မှတ်မထားရင် default အနေနဲ့ "232003" ကို သုံးပါမယ်။
     const MASTER_ADMIN_KEY = env.ADMIN_KEY || "232003"; 
 
     if (adminKey !== MASTER_ADMIN_KEY) {
       return NextResponse.json({ success: false, message: "Admin Key မှားယွင်းနေပါသည်" }, { status: 401 });
     }
 
+    // Post နဲ့ သက်ဆိုင်တာတွေ အကုန်ဖျက်မယ်
     await db.prepare('DELETE FROM post_likes WHERE post_id = ?').bind(id).run();
-    await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
     await db.prepare('DELETE FROM comments WHERE post_id = ?').bind(id).run();
+    await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
     
     return NextResponse.json({ success: true, message: "Deleted successfully" });
   } catch (error) {
