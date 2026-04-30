@@ -69,7 +69,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, reactionType: type }),
       });
-      setActiveReactionPicker(null); // Reaction ပေးပြီးရင် Picker ပိတ်မယ်
+      setActiveReactionPicker(null);
       fetchPosts();
     } catch (error) {
       console.error("Reaction error:", error);
@@ -93,14 +93,19 @@ export default function Home() {
 
     try {
       const response = await fetch("/api/posts", { method: "POST", body: formData });
+      const result = await response.json();
+
       if (response.ok) {
         setContent("");
         setSelectedFile(null);
         setPreviewUrl(null);
         fetchPosts();
+      } else {
+        // Backend ကပို့တဲ့ Rate Limit Error (သို့) တခြား error ပြမယ်
+        alert(result.error || "တင်လို့မရဖြစ်သွားပါသည်");
       }
     } catch (error) {
-      alert("တင်လို့မရဖြစ်သွားပါသည်");
+      alert("Network error ဖြစ်သွားပါသည်");
     } finally {
       setLoading(false);
     }
@@ -115,10 +120,14 @@ export default function Home() {
 
     try {
       const response = await fetch("/api/posts", { method: "POST", body: formData });
+      const result = await response.json();
+
       if (response.ok) {
         setCommentInputs(prev => ({ ...prev, [postId]: "" }));
         setActiveCommentBox(prev => ({ ...prev, [postId]: false }));
         fetchPosts();
+      } else {
+        alert(result.error || "Comment ပေးလို့မရပါ");
       }
     } catch (error) {
       console.error("Comment error:", error);
@@ -231,8 +240,6 @@ export default function Home() {
               {/* Reaction & Action Bar */}
               <div className="flex items-center gap-6 pt-5 border-t dark:border-slate-800 border-slate-100">
                 <div className="relative group" onMouseLeave={() => setActiveReactionPicker(null)}>
-                  
-                  {/* Reaction Picker Logic */}
                   {(activeReactionPicker === post.id) && (
                     <div className="absolute bottom-full mb-3 left-0 flex bg-white dark:bg-slate-800 shadow-2xl border dark:border-slate-700 p-2.5 rounded-full gap-3 animate-in fade-in zoom-in duration-200 z-20">
                       {Object.entries(REACTION_EMOJIS).map(([name, emoji]) => (
@@ -246,8 +253,6 @@ export default function Home() {
                       ))}
                     </div>
                   )}
-                  
-                  {/* Reaction Button (Trigger Picker) */}
                   <button 
                     onClick={() => setActiveReactionPicker(activeReactionPicker === post.id ? null : post.id)}
                     className={`flex items-center gap-2 font-bold text-sm cursor-pointer py-1 px-2 rounded-lg transition-colors ${post.isLiked ? 'text-blue-500 bg-blue-500/5' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
@@ -263,7 +268,6 @@ export default function Home() {
                 <button onClick={() => handleShare(post.id, post.content)} className="flex items-center gap-2 font-bold text-sm text-slate-500 hover:text-blue-500">🔗 Share</button>
               </div>
 
-              {/* Comment Input */}
               {activeCommentBox[post.id] && (
                 <div className="mt-6 flex gap-3 animate-in fade-in slide-in-from-top-2">
                   <input 
@@ -276,7 +280,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Comments List */}
               <div className="mt-6 space-y-3 max-h-[250px] overflow-y-auto pr-2">
                 {post.comments?.map((comment: any) => (
                   <div key={comment.id} className={`p-4 rounded-2xl text-[14px] ${darkMode ? 'bg-slate-800/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
