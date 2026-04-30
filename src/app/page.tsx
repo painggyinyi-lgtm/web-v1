@@ -45,7 +45,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // --- အသစ်ထည့်သွင်းထားသော SCROLL LOGIC ---
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && posts.length > 0) {
@@ -54,14 +53,12 @@ export default function Home() {
       if (element) {
         setTimeout(() => {
           element.scrollIntoView({ behavior: "smooth", block: "center" });
-          // ပေါ်လွင်အောင် ခဏလေး highlight လုပ်ပြချင်ရင် (optional)
           element.classList.add("ring-4", "ring-blue-500/30");
           setTimeout(() => element.classList.remove("ring-4", "ring-blue-500/30"), 2000);
         }, 500);
       }
     }
   }, [posts]);
-  // ---------------------------------------
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -133,17 +130,36 @@ export default function Home() {
     fetchPosts();
   };
 
+  // --- ပြင်ဆင်ထားသော DELETE LOGIC ---
   const handleDelete = async (id: number) => {
-    if (!confirm("ဒီပို့စ်ကို ဖျက်မှာ သေချာလား?")) return;
-    await fetch("/api/posts", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    fetchPosts();
+    // ၁။ Admin Key ကို prompt နဲ့ အရင်တောင်းမယ်
+    const adminKey = prompt("ဒီပို့စ်ကို ဖျက်ဖို့ Admin Key ရိုက်ထည့်ပါ -");
+    
+    // Cancel နှိပ်ရင် ဘာမှမလုပ်ဘူး
+    if (adminKey === null) return;
+
+    try {
+      const response = await fetch("/api/posts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        // ၂။ id ရော adminKey ရောကို body ထဲထည့်ပြီး ပို့မယ်
+        body: JSON.stringify({ id, adminKey }), 
+      });
+      
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        alert("ဖျက်သိမ်းပြီးပါပြီ");
+        fetchPosts();
+      } else {
+        // Admin Key မှားရင် API ဘက်ကပို့တဲ့ message ကို ပြမယ်
+        alert(result.message || "Key မှားနေသဖြင့် ဖျက်လို့မရပါ");
+      }
+    } catch (error) {
+      alert("Error ဖြစ်သွားပါသည်");
+    }
   };
 
-  // --- SHARE FUNCTION ပြင်ဆင်ထားမှု ---
   const handleShare = (postId: number, text: string) => {
     const shareUrl = `${window.location.origin}/#post-${postId}`;
     const shareContent = `${text}\n\nRead more at: ${shareUrl}`;
@@ -159,7 +175,6 @@ export default function Home() {
       alert("Direct Post Link copied to clipboard!");
     }
   };
-  // -----------------------------------
 
   const toggleCommentBox = (postId: number) => {
     setActiveCommentBox(prev => ({ ...prev, [postId]: !prev[postId] }));
@@ -219,7 +234,6 @@ export default function Home() {
 
         <div className="space-y-8">
           {posts.map((post) => (
-            /* id သတ်မှတ်လိုက်သောကြောင့် Share link မှဝင်လာလျှင် ဤနေရာသို့ တိုက်ရိုက်ရောက်မည် */
             <div key={post.id} id={`post-${post.id}`} className={`rounded-3xl p-6 border shadow-sm transition-all duration-500 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-4">
@@ -229,6 +243,7 @@ export default function Home() {
                     <p className="text-[10px] opacity-50 font-bold uppercase tracking-tighter">{new Date(post.created_at).toLocaleTimeString()}</p>
                   </div>
                 </div>
+                {/* Delete Button */}
                 <button onClick={() => handleDelete(post.id)} className="text-slate-500 hover:text-red-500 transition-colors">🗑️</button>
               </div>
 
@@ -245,9 +260,10 @@ export default function Home() {
               )}
 
               <div className="flex items-center gap-6 pt-5 border-t border-slate-100 dark:border-slate-800">
-                <button onClick={() => handleLike(post.id)} className="flex items-center gap-2 font-bold text-sm">👍 {post.likes || 0}</button>
+                <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 font-bold text-sm ${post.isLiked ? 'text-blue-500' : ''}`}>
+                  {post.isLiked ? '💙' : '👍'} {post.likes || 0}
+                </button>
                 <button onClick={() => toggleCommentBox(post.id)} className="flex items-center gap-2 font-bold text-sm">💬 {post.comments?.length || 0}</button>
-                {/* Share Button တွင် postId ကိုပါ ထည့်ပေးလိုက်သည် */}
                 <button onClick={() => handleShare(post.id, post.content)} className="flex items-center gap-2 font-bold text-sm text-slate-500 hover:text-blue-500 transition-colors">🔗 Share</button>
               </div>
 
