@@ -158,7 +158,7 @@ export default function Home() {
   const handleShare = (postId: number, text: string) => {
     const shareUrl = `${window.location.origin}/#post-${postId}`;
     if (navigator.share) {
-      navigator.share({ title: 'KP ANON Post', text: text, url: shareUrl }).catch(() => null);
+      navigator.share({ title: 'ANON Post', text: text, url: shareUrl }).catch(() => null);
     } else {
       navigator.clipboard.writeText(`${text}\n\nRead more: ${shareUrl}`);
       alert("Link copied!");
