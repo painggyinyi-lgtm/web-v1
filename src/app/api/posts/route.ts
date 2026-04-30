@@ -7,8 +7,6 @@ export async function GET(request: NextRequest) {
   const db = (process.env as any).DB;
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
 
-  // posts table ကအချက်အလက်တွေအပြင် Like အရေအတွက်ကို subquery နဲ့တွက်မယ်
-  // လက်ရှိ user က like ထားသလားဆိုတာကိုပါ true/false ထုတ်ပေးမယ်
   const { results: posts } = await db.prepare(`
     SELECT p.*, 
     (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
@@ -66,29 +64,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Like Logic အသစ် (တစ်ယောက်တစ်ခါပဲ ပေးလို့ရအောင် Toggle လုပ်မယ်)
+// Like Logic
 export async function PATCH(request: NextRequest) {
   const db = (process.env as any).DB;
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
-  const { id } = await request.json(); // id သည် post_id ဖြစ်သည်
+  const { id } = await request.json();
   
   try {
-    // ၁။ အရင်ရှိမရှိ စစ်မယ်
     const existingLike = await db.prepare(
       "SELECT id FROM post_likes WHERE post_id = ? AND user_ip = ?"
     ).bind(id, userIp).first();
 
     if (existingLike) {
-      // ၂။ ရှိပြီးသားဆိုရင် Unlike လုပ်မယ် (ဖျက်မယ်)
-      await db.prepare(
-        "DELETE FROM post_likes WHERE post_id = ? AND user_ip = ?"
-      ).bind(id, userIp).run();
+      await db.prepare("DELETE FROM post_likes WHERE post_id = ? AND user_ip = ?").bind(id, userIp).run();
       return NextResponse.json({ success: true, liked: false });
     } else {
-      // ၃။ မရှိသေးရင် Like လုပ်မယ် (အသစ်ထည့်မယ်)
-      await db.prepare(
-        "INSERT INTO post_likes (post_id, user_ip) VALUES (?, ?)"
-      ).bind(id, userIp).run();
+      await db.prepare("INSERT INTO post_likes (post_id, user_ip) VALUES (?, ?)").bind(id, userIp).run();
       return NextResponse.json({ success: true, liked: true });
     }
   } catch (e) {
@@ -96,14 +87,27 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// Delete လုပ်မယ်
+// --- ပြင်ဆင်ထားသော DELETE PART (Admin Only) ---
 export async function DELETE(request: NextRequest) {
   const db = (process.env as any).DB;
-  const { id } = await request.json();
   
-  // Like တွေကိုပါ တစ်ခါတည်း ရှင်းပစ်မယ်
-  await db.prepare('DELETE FROM post_likes WHERE post_id = ?').bind(id).run();
-  await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
-  await db.prepare('DELETE FROM comments WHERE post_id = ?').bind(id).run();
-  return NextResponse.json({ success: true });
+  try {
+    const { id, adminKey } = await request.json();
+    
+    // ဒီနေရာမှာ အစ်ကို့စိတ်ကြိုက် password ပြောင်းနိုင်ပါတယ်
+    const MASTER_ADMIN_KEY = "232003"; 
+
+    if (adminKey !== MASTER_ADMIN_KEY) {
+      return NextResponse.json({ success: false, message: "Admin Key မှားယွင်းနေပါသည်" }, { status: 401 });
+    }
+
+    // Database မှ ဖျက်ခြင်း
+    await db.prepare('DELETE FROM post_likes WHERE post_id = ?').bind(id).run();
+    await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
+    await db.prepare('DELETE FROM comments WHERE post_id = ?').bind(id).run();
+    
+    return NextResponse.json({ success: true, message: "Deleted successfully" });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: "Failed to delete" }, { status: 500 });
+  }
 }
