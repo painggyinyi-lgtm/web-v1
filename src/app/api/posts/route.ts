@@ -11,14 +11,14 @@ export async function GET(request: NextRequest) {
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
 
   try {
-    // 1. Online User Tracking
+    // 1. Online User Tracking (၁ မိနစ်စာ သိမ်းမယ်)
     if (KV) {
       await KV.put(`online:${userIp}`, Date.now().toString(), { expirationTtl: 60 });
     }
     const onlineList = KV ? await KV.list({ prefix: "online:" }) : { keys: [] };
     const onlineCount = onlineList.keys.length;
 
-    // 2. Database Logic (reaction_type ပါ ဆွဲထုတ်မယ်)
+    // 2. Database Logic
     const { results: posts } = await db.prepare(`
       SELECT p.*, 
       (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
       const { results: comments } = await db.prepare('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC')
         .bind(post.id).all();
       
-      // isLiked ကို myReaction ရှိမရှိနဲ့ စစ်မယ်
       return { 
         ...post, 
         comments, 
@@ -46,16 +45,17 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error("GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// POST: Post/Comment တင်မယ် (နဂိုအတိုင်းပဲ)
+// POST: Rate Limiting ပါဝင်သော Post/Comment တင်ခြင်း
 export async function POST(request: NextRequest) {
   const env = process.env as any;
   const db = env.DB;
+  const KV = env.ONLINE_USERS_KV;
   const bucket = env.MY_BUCKET;
+  const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
 
   try {
     const formData = await request.formData();
@@ -63,12 +63,37 @@ export async function POST(request: NextRequest) {
     const post_id = formData.get('post_id') as string | null;
     const file = formData.get('file') as File | null;
 
+    if (!content && !file) return NextResponse.json({ error: "စာသား သို့မဟုတ် ပုံ ထည့်ပါ" }, { status: 400 });
+
+    // --- RATE LIMITING LOGIC (KV ကို သုံးထားတယ်) ---
+    if (KV) {
+      if (post_id) {
+        // Comment Limit: ၁ မိနစ် ၃ ခု
+        const commentLimitKey = `limit:comment:${userIp}`;
+        const currentCount = parseInt(await KV.get(commentLimitKey) || "0");
+        if (currentCount >= 3) {
+          return NextResponse.json({ error: "မကြာခဏ Comment ပေးခြင်းမှ ခဏနားပါ" }, { status: 429 });
+        }
+        await KV.put(commentLimitKey, (currentCount + 1).toString(), { expirationTtl: 60 });
+      } else {
+        // Post Limit: ၅ မိနစ် ၁ ခု
+        const postLimitKey = `limit:post:${userIp}`;
+        const alreadyPosted = await KV.get(postLimitKey);
+        if (alreadyPosted) {
+          return NextResponse.json({ error: "၅ မိနစ်လျှင် တစ်ကြိမ်သာ Post တင်နိုင်ပါသည်" }, { status: 429 });
+        }
+        await KV.put(postLimitKey, "true", { expirationTtl: 300 }); // 300s = 5 mins
+      }
+    }
+
+    // Comment တင်ခြင်း
     if (post_id) {
       await db.prepare('INSERT INTO comments (post_id, content, created_at) VALUES (?, ?, ?)')
         .bind(post_id, content, new Date().toISOString()).run();
       return NextResponse.json({ success: true, message: "Comment added" });
     } 
 
+    // Post တင်ခြင်း + Media
     let media_url = null;
     let media_type = null;
 
@@ -90,34 +115,25 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH: Multi-Reaction Logic (အသစ်ပြင်ထားတာ)
+// PATCH: Multi-Reaction Logic (နဂိုအတိုင်း)
 export async function PATCH(request: NextRequest) {
   const db = (process.env as any).DB;
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
   
   try {
     const { id, reactionType = 'like' } = await request.json();
-    
-    // ရှိပြီးသား reaction ကို စစ်မယ်
-    const existing = await db.prepare(
-      "SELECT reaction_type FROM post_likes WHERE post_id = ? AND user_ip = ?"
-    ).bind(id, userIp).first();
+    const existing = await db.prepare("SELECT reaction_type FROM post_likes WHERE post_id = ? AND user_ip = ?").bind(id, userIp).first();
 
     if (existing) {
       if (existing.reaction_type === reactionType) {
-        // reaction တူရင် ပြန်ဖြုတ်မယ် (Unlike)
         await db.prepare("DELETE FROM post_likes WHERE post_id = ? AND user_ip = ?").bind(id, userIp).run();
         return NextResponse.json({ success: true, reacted: false });
       } else {
-        // reaction မတူရင် အမျိုးအစား ပြောင်းမယ်
-        await db.prepare("UPDATE post_likes SET reaction_type = ? WHERE post_id = ? AND user_ip = ?")
-          .bind(reactionType, id, userIp).run();
+        await db.prepare("UPDATE post_likes SET reaction_type = ? WHERE post_id = ? AND user_ip = ?").bind(reactionType, id, userIp).run();
         return NextResponse.json({ success: true, reacted: true, type: reactionType });
       }
     } else {
-      // အသစ်ထည့်မယ်
-      await db.prepare("INSERT INTO post_likes (post_id, user_ip, reaction_type) VALUES (?, ?, ?)")
-        .bind(id, userIp, reactionType).run();
+      await db.prepare("INSERT INTO post_likes (post_id, user_ip, reaction_type) VALUES (?, ?, ?)").bind(id, userIp, reactionType).run();
       return NextResponse.json({ success: true, reacted: true, type: reactionType });
     }
   } catch (e) {
@@ -125,12 +141,16 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// DELETE: Admin Only (နဂိုအတိုင်းပဲ)
+// DELETE: Admin Only (လုံခြုံရေး ပိုကောင်းအောင် ပြင်ထားတယ်)
 export async function DELETE(request: NextRequest) {
   const db = (process.env as any).DB;
+  const env = process.env as any;
   try {
     const { id, adminKey } = await request.json();
-    const MASTER_ADMIN_KEY = "232003"; 
+    
+    // Cloudflare Variables ထဲမှာ ADMIN_KEY ဆိုပြီး သတ်မှတ်ထားရင် ပိုကောင်းပါတယ်။ 
+    // မရှိရင် default အနေနဲ့ "232003" ကို သုံးထားမယ်။
+    const MASTER_ADMIN_KEY = env.ADMIN_KEY || "232003"; 
 
     if (adminKey !== MASTER_ADMIN_KEY) {
       return NextResponse.json({ success: false, message: "Admin Key မှားယွင်းနေပါသည်" }, { status: 401 });
