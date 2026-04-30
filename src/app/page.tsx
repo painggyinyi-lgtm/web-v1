@@ -45,6 +45,24 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  // --- အသစ်ထည့်သွင်းထားသော SCROLL LOGIC ---
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && posts.length > 0) {
+      const targetId = hash.replace('#', '');
+      const element = document.getElementById(targetId);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          // ပေါ်လွင်အောင် ခဏလေး highlight လုပ်ပြချင်ရင် (optional)
+          element.classList.add("ring-4", "ring-blue-500/30");
+          setTimeout(() => element.classList.remove("ring-4", "ring-blue-500/30"), 2000);
+        }, 500);
+      }
+    }
+  }, [posts]);
+  // ---------------------------------------
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -66,7 +84,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/posts", {
         method: "POST",
-        body: formData, // FormData ပို့သည့်အခါ JSON.stringify မလိုပါ
+        body: formData,
       });
       
       if (response.ok) {
@@ -125,14 +143,23 @@ export default function Home() {
     fetchPosts();
   };
 
-  const handleShare = (text: string) => {
+  // --- SHARE FUNCTION ပြင်ဆင်ထားမှု ---
+  const handleShare = (postId: number, text: string) => {
+    const shareUrl = `${window.location.origin}/#post-${postId}`;
+    const shareContent = `${text}\n\nRead more at: ${shareUrl}`;
+
     if (navigator.share) {
-      navigator.share({ title: 'KP ANON Post', text: text, url: window.location.href });
+      navigator.share({
+        title: 'KP ANON Post',
+        text: text,
+        url: shareUrl,
+      }).catch(() => null);
     } else {
-      navigator.clipboard.writeText(`${window.location.href}\n\n${text}`);
-      alert("Link copied!");
+      navigator.clipboard.writeText(shareContent);
+      alert("Direct Post Link copied to clipboard!");
     }
   };
+  // -----------------------------------
 
   const toggleCommentBox = (postId: number) => {
     setActiveCommentBox(prev => ({ ...prev, [postId]: !prev[postId] }));
@@ -155,7 +182,6 @@ export default function Home() {
       </nav>
 
       <main className="max-w-2xl mx-auto px-4 py-8">
-        {/* Post Input Box */}
         <div className={`rounded-3xl shadow-2xl p-6 mb-12 border transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
           <div className="flex gap-4">
             <textarea 
@@ -191,10 +217,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Post Feed */}
         <div className="space-y-8">
           {posts.map((post) => (
-            <div key={post.id} className={`rounded-3xl p-6 border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+            /* id သတ်မှတ်လိုက်သောကြောင့် Share link မှဝင်လာလျှင် ဤနေရာသို့ တိုက်ရိုက်ရောက်မည် */
+            <div key={post.id} id={`post-${post.id}`} className={`rounded-3xl p-6 border shadow-sm transition-all duration-500 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-700 to-slate-800 flex items-center justify-center text-xl font-black text-blue-500">U</div>
@@ -208,7 +234,6 @@ export default function Home() {
 
               <p className="text-lg leading-[1.7] font-medium mb-4 whitespace-pre-wrap">{post.content}</p>
 
-              {/* Media Display အပိုင်း - R2 မှ ပုံ/ဗီဒီယို ပြသခြင်း */}
               {post.media_url && (
                 <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-black/5">
                   {post.media_type?.startsWith('image/') ? (
@@ -222,10 +247,10 @@ export default function Home() {
               <div className="flex items-center gap-6 pt-5 border-t border-slate-100 dark:border-slate-800">
                 <button onClick={() => handleLike(post.id)} className="flex items-center gap-2 font-bold text-sm">👍 {post.likes || 0}</button>
                 <button onClick={() => toggleCommentBox(post.id)} className="flex items-center gap-2 font-bold text-sm">💬 {post.comments?.length || 0}</button>
-                <button onClick={() => handleShare(post.content)} className="flex items-center gap-2 font-bold text-sm text-slate-500">🔗 Share</button>
+                {/* Share Button တွင် postId ကိုပါ ထည့်ပေးလိုက်သည် */}
+                <button onClick={() => handleShare(post.id, post.content)} className="flex items-center gap-2 font-bold text-sm text-slate-500 hover:text-blue-500 transition-colors">🔗 Share</button>
               </div>
 
-              {/* Comment Box */}
               {activeCommentBox[post.id] && (
                 <div className="mt-6 flex gap-3">
                   <input 
@@ -239,7 +264,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Comment List */}
               <div className="mt-6 space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                 {post.comments?.map((comment: any) => (
                   <div key={comment.id} className={`p-4 rounded-2xl text-[14px] shadow-sm ${darkMode ? 'bg-slate-800/40 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
