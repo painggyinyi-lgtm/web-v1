@@ -188,7 +188,7 @@ export default function Home() {
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-xl shadow-blue-500/20">
               <span className="text-white font-black text-xl italic">K</span>
             </div>
-            <h1 className="text-xl font-black tracking-tighter">KP ANON <span className="text-blue-500 text-[10px] tracking-normal font-bold bg-blue-500/10 px-2 py-0.5 rounded-full ml-1">R2 Ready</span></h1>
+            <h1 className="text-xl font-black tracking-tighter">ANON <span className="text-blue-500 text-[10px] tracking-normal font-bold bg-blue-500/10 px-2 py-0.5 rounded-full ml-1">v 1.0</span></h1>
           </div>
           <button onClick={toggleTheme} className={`p-2.5 rounded-2xl border transition-all active:scale-90 ${darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400 shadow-lg' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
             {darkMode ? "☀️ Light" : "🌙 Dark"}
@@ -294,7 +294,7 @@ export default function Home() {
       </main>
 
       <footer className="py-12 text-center text-[10px] font-black uppercase tracking-[0.5em] opacity-30">
-        &copy; 2026 KP ANON PREMIER NETWORK
+        &copy; 2026 ANON PREMIER NETWORK
       </footer>
     </div>
   );
