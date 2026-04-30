@@ -22,6 +22,7 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(false);
   const [commentInputs, setCommentInputs] = useState<{ [key: number]: string }>({});
   const [activeCommentBox, setActiveCommentBox] = useState<{ [key: number]: boolean }>({});
+  const [activeReactionPicker, setActiveReactionPicker] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -61,7 +62,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Multi-Reaction Handle Function
   const handleReaction = async (id: number, type: string) => {
     try {
       await fetch("/api/posts", {
@@ -69,6 +69,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, reactionType: type }),
       });
+      setActiveReactionPicker(null); // Reaction ပေးပြီးရင် Picker ပိတ်မယ်
       fetchPosts();
     } catch (error) {
       console.error("Reaction error:", error);
@@ -229,29 +230,36 @@ export default function Home() {
 
               {/* Reaction & Action Bar */}
               <div className="flex items-center gap-6 pt-5 border-t dark:border-slate-800 border-slate-100">
-                <div className="relative group">
-                  {/* Reaction Picker (Hover on PC, Hold on Mobile) */}
-                  <div className="absolute bottom-full mb-2 left-0 hidden group-hover:flex bg-white dark:bg-slate-800 shadow-xl border dark:border-slate-700 p-2 rounded-full gap-2 animate-in fade-in zoom-in duration-200 z-10">
-                    {Object.entries(REACTION_EMOJIS).map(([name, emoji]) => (
-                      <button key={name} onClick={() => handleReaction(post.id, name)} className="hover:scale-150 transition-transform text-xl px-1">
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
+                <div className="relative group" onMouseLeave={() => setActiveReactionPicker(null)}>
                   
-                  {/* Active Reaction Display */}
+                  {/* Reaction Picker Logic */}
+                  {(activeReactionPicker === post.id) && (
+                    <div className="absolute bottom-full mb-3 left-0 flex bg-white dark:bg-slate-800 shadow-2xl border dark:border-slate-700 p-2.5 rounded-full gap-3 animate-in fade-in zoom-in duration-200 z-20">
+                      {Object.entries(REACTION_EMOJIS).map(([name, emoji]) => (
+                        <button 
+                          key={name} 
+                          onClick={() => handleReaction(post.id, name)} 
+                          className="hover:scale-150 transition-transform text-2xl px-1.5 active:scale-90"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Reaction Button (Trigger Picker) */}
                   <button 
-                    onClick={() => handleReaction(post.id, 'like')} 
-                    className={`flex items-center gap-2 font-bold text-sm transition-colors ${post.isLiked ? 'text-blue-500' : 'text-slate-500'}`}
+                    onClick={() => setActiveReactionPicker(activeReactionPicker === post.id ? null : post.id)}
+                    className={`flex items-center gap-2 font-bold text-sm cursor-pointer py-1 px-2 rounded-lg transition-colors ${post.isLiked ? 'text-blue-500 bg-blue-500/5' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                   >
-                    <span className="text-lg">
+                    <span className="text-xl">
                       {post.reaction_type ? REACTION_EMOJIS[post.reaction_type] : '👍'}
                     </span>
-                    {post.likes || 0}
+                    <span>{post.likes || 0}</span>
                   </button>
                 </div>
 
-                <button onClick={() => setActiveCommentBox({ ...activeCommentBox, [post.id]: !activeCommentBox[post.id] })} className="flex items-center gap-2 font-bold text-sm">💬 {post.comments?.length || 0}</button>
+                <button onClick={() => setActiveCommentBox({ ...activeCommentBox, [post.id]: !activeCommentBox[post.id] })} className="flex items-center gap-2 font-bold text-sm hover:text-blue-500 transition-colors">💬 {post.comments?.length || 0}</button>
                 <button onClick={() => handleShare(post.id, post.content)} className="flex items-center gap-2 font-bold text-sm text-slate-500 hover:text-blue-500">🔗 Share</button>
               </div>
 
