@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-// XSS Attack ကာကွယ်ရေးအတွက် Input သန့်စင်ခြင်း
 function sanitizeInput(text: string): string {
   if (!text) return "";
   return text
@@ -14,31 +13,43 @@ function sanitizeInput(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// GET: Posts + Online Status
+// GET: Posts + Online Status + Views
 export async function GET(request: NextRequest) {
   const env = process.env as any;
   const db = env.DB;
   const KV = env.ONLINE_USERS_KV;
   const userIp = request.headers.get('cf-connecting-ip') || 'anonymous';
 
+  // URL ထဲမှာ ?track=postId ပါလာရင် View တိုးပေးဖို့ logic
+  const { searchParams } = new URL(request.url);
+  const trackId = searchParams.get('track');
+
   try {
-    // 1. Online Tracking (KV ရှိမှ လုပ်မယ်)
+    // --- 1. View Tracking Logic (Unique IP per Post) ---
+    if (trackId) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO post_views (post_id, user_ip) VALUES (?, ?)
+      `).bind(trackId, userIp).run();
+      return NextResponse.json({ success: true });
+    }
+
+    // --- 2. Online Tracking ---
     if (KV) {
       await KV.put(`online:${userIp}`, Date.now().toString(), { expirationTtl: 60 });
     }
     const onlineList = KV ? await KV.list({ prefix: "online:" }) : { keys: [] };
     const onlineCount = onlineList.keys.length;
 
-    // 2. Fetch Posts (Pinned posts stay on top)
+    // --- 3. Fetch Posts with Likes & Views ---
     const { results: posts } = await db.prepare(`
       SELECT p.*, 
       (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) as likes,
+      (SELECT COUNT(*) FROM post_views WHERE post_id = p.id) as views,
       (SELECT reaction_type FROM post_likes WHERE post_id = p.id AND user_ip = ? LIMIT 1) as myReaction
       FROM posts p 
       ORDER BY is_pinned DESC, created_at DESC
     `).bind(userIp).all();
     
-    // 3. Comments များကို တစ်ခါတည်း ဆွဲယူခြင်း
     const postsWithComments = await Promise.all((posts || []).map(async (post: any) => {
       const { results: comments } = await db.prepare('SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC')
         .bind(post.id).all();
@@ -61,7 +72,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Create Post or Comment with Rate Limiting
 export async function POST(request: NextRequest) {
   const env = process.env as any;
   const db = env.DB;
@@ -80,7 +90,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "စာသား သို့မဟုတ် ပုံ ထည့်ပါ" }, { status: 400 });
     }
 
-    // Rate Limiting Logic (KV သုံးထားသည်)
     if (KV) {
       if (post_id) {
         const commentKey = `limit:comment:${userIp}`;
@@ -94,14 +103,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Comment တင်ခြင်း
     if (post_id) {
       await db.prepare('INSERT INTO comments (post_id, content, created_at) VALUES (?, ?, ?)')
         .bind(post_id, content, new Date().toISOString()).run();
       return NextResponse.json({ success: true });
     } 
 
-    // Media Upload (R2 Bucket)
     let media_url = null;
     let media_type = null;
     if (file && file.size > 0) {
@@ -112,7 +119,6 @@ export async function POST(request: NextRequest) {
       media_type = file.type;
     }
 
-    // Post အသစ် သိမ်းခြင်း
     await db.prepare('INSERT INTO posts (content, media_url, media_type, created_at, is_pinned) VALUES (?, ?, ?, ?, 0)')
       .bind(content, media_url, media_type, new Date().toISOString()).run();
 
@@ -122,7 +128,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH: Reactions AND Admin Pinning
 export async function PATCH(request: NextRequest) {
   const env = process.env as any;
   const db = env.DB;
@@ -133,7 +138,6 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { id, reactionType, adminKey } = body;
 
-    // Pinning Logic
     if (adminKey !== undefined) {
       if (adminKey !== MASTER_ADMIN_KEY) {
         return NextResponse.json({ message: "Admin Key မှားယွင်းနေပါသည်" }, { status: 401 });
@@ -146,7 +150,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true, pinned: !!nextStatus });
     }
 
-    // Reaction Logic
     const type = reactionType || 'like';
     const existing = await db.prepare("SELECT reaction_type FROM post_likes WHERE post_id = ? AND user_ip = ?").bind(id, userIp).first();
 
@@ -167,7 +170,6 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// DELETE: Post + Likes + Comments
 export async function DELETE(request: NextRequest) {
   const env = process.env as any;
   const db = env.DB;
@@ -175,14 +177,13 @@ export async function DELETE(request: NextRequest) {
   
   try {
     const { id, adminKey } = await request.json();
-
     if (adminKey !== MASTER_ADMIN_KEY) {
       return NextResponse.json({ message: "Admin Key မှားယွင်းနေပါသည်" }, { status: 401 });
     }
 
-    // Transaction သဘောမျိုး အကုန်ဖျက်မယ်
     await db.batch([
       db.prepare('DELETE FROM post_likes WHERE post_id = ?').bind(id),
+      db.prepare('DELETE FROM post_views WHERE post_id = ?').bind(id), // Views တွေပါ ဖျက်ပေးမယ်
       db.prepare('DELETE FROM comments WHERE post_id = ?').bind(id),
       db.prepare('DELETE FROM posts WHERE id = ?').bind(id)
     ]);

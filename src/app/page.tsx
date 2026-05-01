@@ -1,11 +1,11 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @next/next/no-img-element */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Send, Image as ImageIcon, Trash2, Share2, MessageCircle, 
-  Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap, MessageSquare
+  Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap, MessageSquare, Eye
 } from "lucide-react";
 
 const R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"; 
@@ -34,6 +34,9 @@ export default function Home() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  
+  // Tracked IDs to avoid duplicate tracking in single session
+  const trackedPosts = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -55,14 +58,24 @@ export default function Home() {
     try {
       const res = await fetch("/api/posts");
       const data = await res.json();
-      if (data.posts) setPosts(data.posts);
+      if (data.posts) {
+        setPosts(data.posts);
+        
+        // --- View Tracking Logic ---
+        data.posts.forEach((post: any) => {
+          if (!trackedPosts.current.has(post.id)) {
+            fetch(`/api/posts?track=${post.id}`);
+            trackedPosts.current.add(post.id);
+          }
+        });
+      }
       if (data.onlineCount) setOnlineCount(data.onlineCount);
     } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
   useEffect(() => {
     fetchPosts();
-    const interval = setInterval(fetchPosts, 10000);
+    const interval = setInterval(fetchPosts, 15000); // 15s တိုင်း refresh လုပ်မယ်
     return () => clearInterval(interval);
   }, [fetchPosts]);
 
@@ -197,6 +210,7 @@ export default function Home() {
       </nav>
 
       <main className="relative max-w-2xl mx-auto px-4 py-10">
+        {/* Post Creation Box */}
         <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
           <textarea 
             className={`w-full p-4 rounded-2xl outline-none transition-all resize-none text-lg font-medium bg-transparent ${darkMode ? 'text-white' : 'text-slate-700'}`}
@@ -222,6 +236,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Posts Feed */}
         <div className="space-y-8">
           <AnimatePresence mode="popLayout">
             {posts.map((post) => (
@@ -250,11 +265,17 @@ export default function Home() {
                     </div>
                     <div>
                       <p className="font-black text-[15px]">Anonymous {post.is_pinned && " (Admin's Choice)"}</p>
-                      <p className="text-[10px] opacity-40 font-bold uppercase">{new Date(post.created_at).toLocaleString()}</p>
+                      <div className="flex items-center gap-2 opacity-40">
+                        <p className="text-[10px] font-bold uppercase">{new Date(post.created_at).toLocaleString()}</p>
+                        <span className="w-1 h-1 bg-slate-500 rounded-full" />
+                        <div className="flex items-center gap-1">
+                          <Eye size={12} />
+                          <span className="text-[10px] font-bold">{post.views || 0}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    {/* Pin/Unpin Button */}
                     <button onClick={() => handlePin(post.id)} className={`p-2 transition-colors ${post.is_pinned ? 'text-yellow-400' : 'text-slate-400 hover:text-yellow-500'}`}>
                       <Zap size={18} fill={post.is_pinned ? "currentColor" : "none"} />
                     </button>
@@ -274,7 +295,7 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-4 pt-4 border-t dark:border-slate-800/50">
+                <div className="flex items-center gap-3 pt-4 border-t dark:border-slate-800/50">
                   <div className="relative" onMouseLeave={() => setActiveReactionPicker(null)}>
                     <AnimatePresence>
                       {activeReactionPicker === post.id && (
@@ -285,17 +306,17 @@ export default function Home() {
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    <button onClick={() => setActiveReactionPicker(activeReactionPicker === post.id ? null : post.id)} className="flex items-center gap-2 font-bold text-sm py-2.5 px-5 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
+                    <button onClick={() => setActiveReactionPicker(activeReactionPicker === post.id ? null : post.id)} className="flex items-center gap-2 font-bold text-sm py-2.5 px-4 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
                       {post.reaction_type ? <span>{REACTION_EMOJIS[post.reaction_type]?.label}</span> : <ThumbsUp size={18} className="text-slate-400" />}
                       <span>{post.likes || 0}</span>
                     </button>
                   </div>
 
-                  <button onClick={() => setActiveCommentBox(prev => ({ ...prev, [post.id]: !prev[post.id] }))} className="flex items-center gap-2 font-bold text-sm py-2.5 px-5 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
+                  <button onClick={() => setActiveCommentBox(prev => ({ ...prev, [post.id]: !prev[post.id] }))} className="flex items-center gap-2 font-bold text-sm py-2.5 px-4 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
                     <MessageCircle size={18} className="text-slate-400" /> {post.comments?.length || 0}
                   </button>
                   
-                  <button onClick={() => handleShare(post.id, post.content)} className="p-3 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 rounded-full transition-all"><Share2 size={18} /></button>
+                  <button onClick={() => handleShare(post.id, post.content)} className="p-2.5 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 rounded-full transition-all"><Share2 size={18} /></button>
                 </div>
 
                 {activeCommentBox[post.id] && (
@@ -330,6 +351,7 @@ export default function Home() {
         <MessageSquare size={26} />
       </button>
 
+      {/* Feedback Modal */}
       <AnimatePresence>
         {showFeedback && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
