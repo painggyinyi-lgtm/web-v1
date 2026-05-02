@@ -5,7 +5,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Send, Image as ImageIcon, Trash2, Share2, MessageCircle, 
-  Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap, MessageSquare, Eye
+  Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap, MessageSquare, Eye,
+  TrendingUp
 } from "lucide-react";
 
 const R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"; 
@@ -30,12 +31,14 @@ export default function Home() {
   const [activeReactionPicker, setActiveReactionPicker] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
+  // --- 2D State ---
+  const [twodData, setTwodData] = useState<any>(null);
 
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   
-  // Tracked IDs to avoid duplicate tracking in single session
   const trackedPosts = useRef<Set<number>>(new Set());
 
   useEffect(() => {
@@ -54,14 +57,23 @@ export default function Home() {
     else document.documentElement.classList.remove("dark");
   };
 
+  // --- 2D Fetch Function ---
+  const fetch2D = async () => {
+    try {
+      const res = await fetch("/api/twod");
+      if (res.ok) {
+        const data = await res.json();
+        setTwodData(data);
+      }
+    } catch (error) { console.error("2D Fetch error:", error); }
+  };
+
   const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/posts");
       const data = await res.json();
       if (data.posts) {
         setPosts(data.posts);
-        
-        // --- View Tracking Logic ---
         data.posts.forEach((post: any) => {
           if (!trackedPosts.current.has(post.id)) {
             fetch(`/api/posts?track=${post.id}`);
@@ -75,8 +87,13 @@ export default function Home() {
 
   useEffect(() => {
     fetchPosts();
-    const interval = setInterval(fetchPosts, 15000); // 15s တိုင်း refresh လုပ်မယ်
-    return () => clearInterval(interval);
+    fetch2D(); // Initial 2D load
+    const intervalPosts = setInterval(fetchPosts, 15000);
+    const interval2D = setInterval(fetch2D, 60000); // 2D ကို ၁ မိနစ်တစ်ခါ refresh လုပ်မယ်
+    return () => {
+      clearInterval(intervalPosts);
+      clearInterval(interval2D);
+    };
   }, [fetchPosts]);
 
   const handlePin = async (id: number) => {
@@ -210,6 +227,48 @@ export default function Home() {
       </nav>
 
       <main className="relative max-w-2xl mx-auto px-4 py-10">
+        
+        {/* --- 2D LIVE Result Display --- */}
+        {twodData && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-10 overflow-hidden rounded-[32px] p-0.5 bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 shadow-2xl shadow-indigo-500/20"
+          >
+            <div className={`rounded-[31px] p-6 ${darkMode ? 'bg-slate-950' : 'bg-white'}`}>
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-500">
+                    <TrendingUp size={18} />
+                  </div>
+                  <h2 className="text-sm font-black uppercase tracking-widest opacity-60">Thai 2D Live</h2>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-[10px] font-black text-indigo-500 animate-pulse">● LIVE UPDATING</span>
+                  <span className="text-[9px] opacity-40 font-bold">{twodData.time}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 items-center">
+                <div className="text-center">
+                  <p className="text-[10px] font-bold opacity-40 uppercase mb-1">SET Index</p>
+                  <p className="text-xl font-black tracking-tighter">{twodData.set || "----.--"}</p>
+                </div>
+
+                <div className="relative flex flex-col items-center justify-center py-4 px-2 rounded-[24px] bg-indigo-600 text-white shadow-xl shadow-indigo-600/30">
+                   <p className="text-[9px] font-black uppercase mb-1 opacity-80">2D Result</p>
+                   <p className="text-5xl font-black tracking-tighter">{twodData.twod || "--"}</p>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-[10px] font-bold opacity-40 uppercase mb-1">Value</p>
+                  <p className="text-xl font-black tracking-tighter">{twodData.value || "----.--"}</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Post Creation Box */}
         <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
           <textarea 
