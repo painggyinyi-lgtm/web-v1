@@ -26,24 +26,25 @@ export default function Home() {
   const [onlineCount, setOnlineCount] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [mounted, setMounted] = useState(false); // Hydration error ကာကွယ်ရန်
   const [commentInputs, setCommentInputs] = useState<{ [key: number]: string }>({});
   const [activeCommentBox, setActiveCommentBox] = useState<{ [key: number]: boolean }>({});
   const [activeReactionPicker, setActiveReactionPicker] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
-  // --- 2D State ---
   const [twodData, setTwodData] = useState<any>(null);
-
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   
   const trackedPosts = useRef<Set<number>>(new Set());
 
+  // Theme Initial Load
   useEffect(() => {
+    setMounted(true);
     const savedTheme = localStorage.getItem("theme");
-    if (savedTheme === "dark") {
+    if (savedTheme === "dark" || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       setDarkMode(true);
       document.documentElement.classList.add("dark");
     }
@@ -57,7 +58,6 @@ export default function Home() {
     else document.documentElement.classList.remove("dark");
   };
 
-  // --- 2D Fetch Function ---
   const fetch2D = async () => {
     try {
       const res = await fetch("/api/twod");
@@ -71,25 +71,26 @@ export default function Home() {
   const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/posts");
+      if (!res.ok) return;
       const data = await res.json();
       if (data.posts) {
         setPosts(data.posts);
         data.posts.forEach((post: any) => {
           if (!trackedPosts.current.has(post.id)) {
-            fetch(`/api/posts?track=${post.id}`);
+            fetch(`/api/posts?track=${post.id}`).catch(() => {});
             trackedPosts.current.add(post.id);
           }
         });
       }
-      if (data.onlineCount) setOnlineCount(data.onlineCount);
+      if (data.onlineCount !== undefined) setOnlineCount(data.onlineCount);
     } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
   useEffect(() => {
     fetchPosts();
-    fetch2D(); // Initial 2D load
+    fetch2D();
     const intervalPosts = setInterval(fetchPosts, 15000);
-    const interval2D = setInterval(fetch2D, 60000); // 2D ကို ၁ မိနစ်တစ်ခါ refresh လုပ်မယ်
+    const interval2D = setInterval(fetch2D, 60000); 
     return () => {
       clearInterval(intervalPosts);
       clearInterval(interval2D);
@@ -163,10 +164,10 @@ export default function Home() {
   const handleShare = async (id: number, textContent: string) => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'ANON Post', text: textContent, url: window.location.origin });
+        await navigator.share({ title: 'ANON Post', text: textContent, url: window.location.href });
       } else {
-        navigator.clipboard.writeText(window.location.origin);
-        alert("Link copied!");
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Link copied to clipboard!");
       }
     } catch (error) { console.error(error); }
   };
@@ -202,6 +203,8 @@ export default function Home() {
       }
     } catch (error) { console.error(error); }
   };
+
+  if (!mounted) return <div className="min-h-screen bg-slate-900" />; // Initial loading state
 
   return (
     <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-[#020617] text-slate-200' : 'bg-[#f1f5f9] text-slate-900'}`}>
@@ -278,18 +281,18 @@ export default function Home() {
           {previewUrl && (
             <div className="mt-4 relative rounded-3xl overflow-hidden border-4 border-slate-100 dark:border-slate-800">
               <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
-              <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white">✕</button>
+              <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black">✕</button>
             </div>
           )}
           <div className="mt-6 flex justify-between items-center border-t dark:border-slate-800 pt-5">
-            <label className="flex items-center gap-2 cursor-pointer text-blue-500 font-bold px-4 py-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20">
+            <label className="flex items-center gap-2 cursor-pointer text-blue-500 font-bold px-4 py-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
               <ImageIcon size={20} /> <span className="text-sm">Photo</span>
               <input type="file" className="hidden" accept="image/*,video/*" onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) { setSelectedFile(file); setPreviewUrl(URL.createObjectURL(file)); }
               }} />
             </label>
-            <button onClick={handleSubmit} disabled={loading} className={`px-8 py-3 rounded-2xl font-black text-sm uppercase transition-all ${loading ? "bg-slate-700 text-slate-400" : "bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25"}`}>
+            <button onClick={handleSubmit} disabled={loading || (!content.trim() && !selectedFile)} className={`px-8 py-3 rounded-2xl font-black text-sm uppercase transition-all ${loading ? "bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"}`}>
               {loading ? "Posting..." : "Post"}
             </button>
           </div>
@@ -378,28 +381,30 @@ export default function Home() {
                   <button onClick={() => handleShare(post.id, post.content)} className="p-2.5 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 rounded-full transition-all"><Share2 size={18} /></button>
                 </div>
 
-                {activeCommentBox[post.id] && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex gap-3">
-                      <input 
-                        className={`flex-1 px-5 py-3 rounded-2xl text-sm outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500' : 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 text-slate-900 shadow-inner'}`}
-                        placeholder="စကားပြောကြည့်ပါ..." value={commentInputs[post.id] || ""}
-                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
-                        onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
-                      />
-                      <button onClick={() => handleCommentSubmit(post.id)} className="w-12 h-12 flex items-center justify-center bg-indigo-600 text-white rounded-2xl shadow-lg hover:bg-indigo-500 transition-all">
-                        <Send size={18} />
-                      </button>
-                    </div>
-                    <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                      {post.comments?.map((comment: any) => (
-                        <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
-                          {comment.content}
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
+                <AnimatePresence>
+                  {activeCommentBox[post.id] && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 overflow-hidden">
+                      <div className="flex gap-3">
+                        <input 
+                          className={`flex-1 px-5 py-3 rounded-2xl text-sm outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500' : 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 text-slate-900 shadow-inner'}`}
+                          placeholder="စကားပြောကြည့်ပါ..." value={commentInputs[post.id] || ""}
+                          onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
+                        />
+                        <button onClick={() => handleCommentSubmit(post.id)} className="w-12 h-12 flex items-center justify-center bg-indigo-600 text-white rounded-2xl shadow-lg hover:bg-indigo-500 transition-all active:scale-90">
+                          <Send size={18} />
+                        </button>
+                      </div>
+                      <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        {post.comments?.map((comment: any) => (
+                          <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
+                            {comment.content}
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ))}
           </AnimatePresence>
