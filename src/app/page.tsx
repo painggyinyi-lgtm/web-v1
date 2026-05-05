@@ -41,6 +41,7 @@ export default function Home() {
   
   const trackedPosts = useRef<Set<number>>(new Set());
 
+  // Theme Initializer
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme");
@@ -50,13 +51,11 @@ export default function Home() {
   }, []);
 
   const toggleTheme = () => {
-    setDarkMode(prev => {
-      const next = !prev;
-      localStorage.setItem("theme", next ? "dark" : "light");
-      if (next) document.documentElement.classList.add("dark");
-      else document.documentElement.classList.remove("dark");
-      return next;
-    });
+    const next = !darkMode;
+    setDarkMode(next);
+    localStorage.setItem("theme", next ? "dark" : "light");
+    if (next) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
   };
 
   const fetch2D = useCallback(async () => {
@@ -76,6 +75,7 @@ export default function Home() {
       const data = await res.json();
       if (data.posts) {
         setPosts(data.posts);
+        // Track views for new posts
         data.posts.forEach((post: any) => {
           if (!trackedPosts.current.has(post.id)) {
             fetch(`/api/posts?track=${post.id}`, { method: 'GET' }).catch(() => {});
@@ -87,18 +87,23 @@ export default function Home() {
     } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
+  // Data Polling
   useEffect(() => {
     if (!mounted) return;
+    
     const updateData = () => {
       if (activeTab === "2d3d") fetch2D();
       else fetchPosts();
     };
-    updateData();
-    const refreshInterval = activeTab === "2d3d" ? 5000 : 15000;
-    const intervalId = setInterval(updateData, refreshInterval);
-    return () => clearInterval(intervalId);
-  }, [mounted, fetchPosts, fetch2D, activeTab]); 
 
+    updateData();
+    const intervalTime = activeTab === "2d3d" ? 5000 : 15000;
+    const intervalId = setInterval(updateData, intervalTime);
+    
+    return () => clearInterval(intervalId);
+  }, [mounted, activeTab, fetchPosts, fetch2D]);
+
+  // Clean up Object URLs to prevent memory leaks
   useEffect(() => {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
   }, [previewUrl]);
@@ -113,6 +118,7 @@ export default function Home() {
         body: JSON.stringify({ id, adminKey, action: "pin" })
       });
       if (res.ok) fetchPosts();
+      else alert("Key မှားနေပါသည် သို့မဟုတ် Error တက်နေပါသည်။");
     } catch (error) { alert("Server error!"); }
   };
 
@@ -142,6 +148,7 @@ export default function Home() {
       if (res.ok) {
         setFeedbackText("");
         setShowFeedback(false);
+        alert("ကျေးဇူးတင်ပါတယ်! Feedback ပို့ပြီးပါပြီ။");
       }
     } finally { setIsSubmittingFeedback(false); }
   };
@@ -166,7 +173,7 @@ export default function Home() {
         await navigator.share({ title: 'ANON Post', text: textContent.substring(0, 100), url: shareUrl });
       } else {
         await navigator.clipboard.writeText(shareUrl);
-        alert("Link copied!");
+        alert("Link copied to clipboard!");
       }
     } catch (error) { console.error(error); }
   };
@@ -186,6 +193,8 @@ export default function Home() {
         setPreviewUrl(null);
         fetchPosts();
       }
+    } catch (err) {
+        alert("Post တင်ရာတွင် အခက်အခဲရှိနေပါသည်။");
     } finally { setLoading(false); }
   };
 
@@ -253,17 +262,13 @@ export default function Home() {
 
       <main className="relative max-w-2xl mx-auto px-4 py-10">
         
-        {/* --- 2D/3D CONTENT TAB (Updated with image_1db660.png style) --- */}
+        {/* --- 2D/3D CONTENT TAB --- */}
         {activeTab === "2d3d" && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
             {twodData ? (
               <div className="relative group mx-auto max-w-xl">
-                {/* Background Glow */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[30px] blur opacity-25"></div>
-                
                 <div className={`relative overflow-hidden rounded-[28px] border border-white/10 p-8 shadow-2xl backdrop-blur-2xl ${darkMode ? 'bg-slate-950/80' : 'bg-white/90'}`}>
-                  
-                  {/* Header */}
                   <div className="flex justify-between items-start mb-10">
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400 border border-indigo-500/30">
@@ -285,14 +290,11 @@ export default function Home() {
                     </span>
                   </div>
 
-                  {/* 2D Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                     <div className="text-center p-6 rounded-2xl bg-white/5 border border-white/5">
                       <p className="text-[9px] font-black opacity-40 uppercase tracking-widest mb-3">Set Index</p>
                       <p className="text-2xl font-black tracking-tight">{twodData.set || "----.--"}</p>
                     </div>
-
-                    {/* Central Highlight */}
                     <div className="relative group/num">
                       <div className="absolute -inset-4 bg-indigo-600/20 blur-xl rounded-full opacity-0 group-hover/num:opacity-100 transition-opacity"></div>
                       <div className="relative flex flex-col items-center justify-center py-10 px-6 rounded-[32px] bg-gradient-to-b from-indigo-600 to-indigo-700 text-white shadow-[0_20px_50px_rgba(79,70,229,0.3)] transform hover:scale-105 transition-all">
@@ -302,17 +304,10 @@ export default function Home() {
                           </p>
                       </div>
                     </div>
-
                     <div className="text-center p-6 rounded-2xl bg-white/5 border border-white/5">
                       <p className="text-[9px] font-black opacity-40 uppercase tracking-widest mb-3">Market Value</p>
                       <p className="text-2xl font-black tracking-tight">{twodData.value || "----.--"}</p>
                     </div>
-                  </div>
-                  
-                  <div className="mt-12 text-center">
-                    <p className="text-[10px] font-medium italic opacity-30 tracking-wide">
-                      Data results are synchronized with Thai Stock Exchange
-                    </p>
                   </div>
                 </div>
               </div>
@@ -334,7 +329,6 @@ export default function Home() {
                 <div className="mt-4 relative rounded-3xl overflow-hidden border-4 border-slate-100 dark:border-slate-800">
                   <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
                   <button onClick={() => {
-                    if (previewUrl) URL.revokeObjectURL(previewUrl);
                     setPreviewUrl(null); 
                     setSelectedFile(null);
                   }} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black transition-colors">
@@ -348,7 +342,6 @@ export default function Home() {
                   <input type="file" className="hidden" accept="image/*,video/*" onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) { 
-                      if (previewUrl) URL.revokeObjectURL(previewUrl);
                       setSelectedFile(file); 
                       setPreviewUrl(URL.createObjectURL(file)); 
                     }
