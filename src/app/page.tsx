@@ -41,7 +41,7 @@ export default function Home() {
   
   const trackedPosts = useRef<Set<number>>(new Set());
 
-  // Theme Initializer
+  // Theme logic
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme");
@@ -86,22 +86,28 @@ export default function Home() {
     } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
+  // Data Fetching Interval
   useEffect(() => {
     if (!mounted) return;
-    const updateData = () => {
+    
+    const tick = () => {
       if (activeTab === "2d3d") fetch2D();
       else fetchPosts();
     };
-    updateData();
+
+    tick();
     const intervalTime = activeTab === "2d3d" ? 5000 : 15000;
-    const intervalId = setInterval(updateData, intervalTime);
+    const intervalId = setInterval(tick, intervalTime);
+    
     return () => clearInterval(intervalId);
   }, [mounted, activeTab, fetchPosts, fetch2D]);
 
+  // Cleanup Preview URL
   useEffect(() => {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
   }, [previewUrl]);
 
+  // Handlers (Pin, Reaction, Delete, etc.)
   const handlePin = async (id: number) => {
     const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ");
     if (!adminKey) return;
@@ -255,9 +261,9 @@ export default function Home() {
         
         {/* --- 2D/3D CONTENT TAB --- */}
         {activeTab === "2d3d" && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
             {twodData ? (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {/* Header Info */}
                 <div className="flex flex-wrap justify-between items-center gap-4 px-2">
                   <div className="flex items-center gap-3">
@@ -266,45 +272,59 @@ export default function Home() {
                     </div>
                     <div>
                       <h2 className="text-sm font-black uppercase tracking-widest text-indigo-400">Thai 2D Live</h2>
-                      <p className="text-[10px] font-bold opacity-50">{twodData.time}</p>
+                      <p className="text-[10px] font-bold opacity-50">{twodData?.time || "Updating..."}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6 text-sm font-bold bg-white/5 backdrop-blur-md border border-white/5 py-2 px-5 rounded-2xl">
-                    <div className="flex flex-col"><span className="text-[9px] uppercase opacity-40">Set</span><span>{twodData.set || "---"}</span></div>
-                    <div className="flex flex-col"><span className="text-[9px] uppercase opacity-40">Value</span><span>{twodData.value || "---"}</span></div>
+                  <div className="flex items-center gap-6 text-sm font-bold bg-white/5 backdrop-blur-md border border-white/5 py-3 px-6 rounded-2xl">
+                    <div className="flex flex-col items-center"><span className="text-[9px] uppercase opacity-40 mb-1">Set</span><span className="text-indigo-400">{twodData?.set || "---"}</span></div>
+                    <div className="w-[1px] h-8 bg-white/10"></div>
+                    <div className="flex flex-col items-center"><span className="text-[9px] uppercase opacity-40 mb-1">Value</span><span className="text-indigo-400">{twodData?.value || "---"}</span></div>
                   </div>
                 </div>
 
-                {/* Main Results Grid (12:01 & 4:30) */}
+                {/* Main Results Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Morning Result */}
-                  <div className={`relative overflow-hidden rounded-[32px] border p-8 shadow-2xl transition-all ${darkMode ? 'bg-slate-950/80 border-white/5' : 'bg-white border-slate-100'}`}>
-                    <div className="absolute top-0 right-0 p-6 opacity-10"><Clock size={80} /></div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-500 mb-6">Morning (12:01 PM)</p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-7xl font-black tracking-tighter">{twodData.morning || twodData.twod || "--"}</span>
-                      <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                  <div className={`relative overflow-hidden rounded-[40px] border p-10 shadow-2xl transition-all ${darkMode ? 'bg-slate-950/80 border-white/5' : 'bg-white border-slate-100'}`}>
+                    <div className="absolute -top-4 -right-4 p-6 opacity-[0.03] rotate-12"><Clock size={120} /></div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.4em] text-blue-500 mb-6">Morning (12:01 PM)</p>
+                    <div className="flex items-center gap-4">
+                      <span className="text-8xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-blue-400 to-blue-600">
+                        {twodData?.morning || twodData?.twod || "--"}
+                      </span>
+                      {twodData?.morning && <span className="w-4 h-4 bg-green-500 rounded-full animate-ping"></span>}
                     </div>
-                    <div className="mt-8 h-1.5 w-full bg-slate-500/10 rounded-full overflow-hidden">
-                      <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 2 }} className="h-full bg-gradient-to-r from-blue-500 to-indigo-500" />
+                    <div className="mt-10 h-2 w-full bg-slate-500/10 rounded-full overflow-hidden">
+                      <motion.div initial={{ x: "-100%" }} animate={{ x: "0%" }} transition={{ duration: 1 }} className="h-full bg-gradient-to-r from-blue-500 to-indigo-500" />
                     </div>
                   </div>
 
                   {/* Evening Result */}
-                  <div className={`relative overflow-hidden rounded-[32px] border p-8 shadow-2xl transition-all ${darkMode ? 'bg-slate-950/80 border-white/5' : 'bg-white border-slate-100'}`}>
-                    <div className="absolute top-0 right-0 p-6 opacity-10"><Clock size={80} /></div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-purple-500 mb-6">Evening (04:30 PM)</p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-7xl font-black tracking-tighter">{twodData.evening || "--"}</span>
+                  <div className={`relative overflow-hidden rounded-[40px] border p-10 shadow-2xl transition-all ${darkMode ? 'bg-slate-950/80 border-white/5' : 'bg-white border-slate-100'}`}>
+                    <div className="absolute -top-4 -right-4 p-6 opacity-[0.03] rotate-12"><Clock size={120} /></div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.4em] text-purple-500 mb-6">Evening (04:30 PM)</p>
+                    <div className="flex items-center gap-4">
+                      <span className="text-8xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-purple-400 to-purple-600">
+                        {twodData?.evening || "--"}
+                      </span>
                     </div>
-                    <div className="mt-8 h-1.5 w-full bg-slate-500/10 rounded-full overflow-hidden">
-                      <div className="h-full w-1/3 bg-gradient-to-r from-purple-500 to-pink-500 opacity-30" />
+                    <div className="mt-10 h-2 w-full bg-slate-500/10 rounded-full overflow-hidden">
+                      <div className="h-full w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20" />
                     </div>
                   </div>
                 </div>
+
+                <div className={`p-6 rounded-[24px] border border-dashed transition-all ${darkMode ? 'bg-slate-900/20 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                  <p className="text-[10px] text-center uppercase font-bold tracking-widest opacity-40">
+                    Live data is synchronized with Thai Stock Exchange
+                  </p>
+                </div>
               </div>
             ) : (
-              <div className="text-center py-20 opacity-40 font-bold uppercase tracking-widest text-sm">Loading Live Data...</div>
+              <div className="flex flex-col items-center justify-center py-32 space-y-4">
+                <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                <div className="text-center opacity-40 font-black uppercase tracking-[0.3em] text-xs">Connecting to Live Feed...</div>
+              </div>
             )}
           </motion.div>
         )}
@@ -312,7 +332,7 @@ export default function Home() {
         {/* --- FEED CONTENT TAB --- */}
         {activeTab === "feed" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto">
-            {/* Post Input */}
+            {/* Input Section */}
             <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
               <textarea 
                 className={`w-full p-4 rounded-2xl outline-none transition-all resize-none text-lg font-medium bg-transparent ${darkMode ? 'text-white' : 'text-slate-700'}`}
@@ -346,6 +366,7 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Posts List */}
             <div className="space-y-8">
               <AnimatePresence mode="popLayout">
                 {posts.map((post) => (
@@ -442,7 +463,7 @@ export default function Home() {
                               <Send size={18} />
                             </button>
                           </div>
-                          <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar text-left">
+                          <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 text-left">
                             {post.comments && post.comments.length > 0 ? (
                               post.comments.map((comment: any) => (
                                 <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
