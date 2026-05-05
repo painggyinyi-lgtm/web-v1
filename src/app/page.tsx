@@ -88,7 +88,6 @@ export default function Home() {
     } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
-  // --- Live Update Logic (၅ စက္ကန့် Update အဖြစ် ပြင်ဆင်ပြီး) ---
   useEffect(() => {
     if (!mounted) return;
 
@@ -100,16 +99,15 @@ export default function Home() {
       }
     };
 
-    // Tab ပြောင်းလျှင် ချက်ချင်း Update လုပ်မည်
     updateData();
 
-    // 2D ဆိုလျှင် ၅ စက္ကန့်၊ Feed ဆိုလျှင် ၁၅ စက္ကန့် Refresh လုပ်မည်
     const refreshInterval = activeTab === "2d3d" ? 5000 : 15000;
     const intervalId = setInterval(updateData, refreshInterval);
 
     return () => clearInterval(intervalId);
   }, [mounted, fetchPosts, fetch2D, activeTab]); 
 
+  // File Preview Cleanup (Memory Leak ကာကွယ်ရန်)
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -123,7 +121,7 @@ export default function Home() {
       const res = await fetch("/api/posts", { 
         method: "PATCH", 
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, adminKey }) 
+        body: JSON.stringify({ id, adminKey, action: "pin" }) // Added action key for clarity
       });
       if (res.ok) fetchPosts();
     } catch (error) { alert("Server error!"); }
@@ -173,11 +171,12 @@ export default function Home() {
   };
 
   const handleShare = async (id: number, textContent: string) => {
+    const shareUrl = `${window.location.origin}/post/${id}`; // More specific URL
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'ANON Post', text: textContent.substring(0, 100), url: window.location.href });
+        await navigator.share({ title: 'ANON Post', text: textContent.substring(0, 100), url: shareUrl });
       } else {
-        await navigator.clipboard.writeText(window.location.href);
+        await navigator.clipboard.writeText(shareUrl);
         alert("Link copied!");
       }
     } catch (error) { console.error(error); }
@@ -194,6 +193,7 @@ export default function Home() {
       if (response.ok) {
         setContent("");
         setSelectedFile(null);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
         setPreviewUrl(null);
         fetchPosts();
       }
@@ -203,11 +203,14 @@ export default function Home() {
   const handleCommentSubmit = async (postId: number) => {
     const commentText = commentInputs[postId];
     if (!commentText?.trim()) return;
-    const formData = new FormData();
-    formData.append("post_id", postId.toString());
-    formData.append("content", commentText);
+    
+    // JSON fetch for comments is often cleaner than FormData if no file is involved
     try {
-      const response = await fetch("/api/posts", { method: "POST", body: formData });
+      const response = await fetch("/api/comments", { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ post_id: postId, content: commentText }) 
+      });
       if (response.ok) {
         setCommentInputs(prev => ({ ...prev, [postId]: "" }));
         fetchPosts();
@@ -215,7 +218,8 @@ export default function Home() {
     } catch (error) { console.error(error); }
   };
 
-  if (!mounted) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-black">ANON</div>;
+  // SSR Hydration fix: Render nothing until mounted to prevent theme mismatch
+  if (!mounted) return null;
 
   return (
     <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-[#020617] text-slate-200' : 'bg-[#f1f5f9] text-slate-900'}`}>
@@ -231,7 +235,6 @@ export default function Home() {
               <h1 className="hidden md:block text-xl font-black tracking-tighter">ANON</h1>
             </div>
 
-            {/* Main Menu Tabs */}
             <div className={`flex p-1 rounded-2xl ${darkMode ? 'bg-slate-900/50' : 'bg-slate-200/50'}`}>
               <button 
                 onClick={() => setActiveTab("feed")}
@@ -323,7 +326,11 @@ export default function Home() {
               {previewUrl && (
                 <div className="mt-4 relative rounded-3xl overflow-hidden border-4 border-slate-100 dark:border-slate-800">
                   <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
-                  <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black transition-colors">
+                  <button onClick={() => {
+                    if (previewUrl) URL.revokeObjectURL(previewUrl);
+                    setPreviewUrl(null); 
+                    setSelectedFile(null);
+                  }} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black transition-colors">
                     <X size={18} />
                   </button>
                 </div>
@@ -398,7 +405,7 @@ export default function Home() {
                     {post.media_url && (
                       <div className="mb-6 rounded-[24px] overflow-hidden border dark:border-slate-800 shadow-inner bg-black/5">
                         {post.media_type?.startsWith('image/') ? (
-                          <img src={`${R2_URL}/${post.media_url}`} alt="Post content" className="w-full h-auto max-h-[550px] object-contain" />
+                          <img src={`${R2_URL}/${post.media_url}`} alt="Post content" className="w-full h-auto max-h-[550px] object-contain" loading="lazy" />
                         ) : (
                           <video src={`${R2_URL}/${post.media_url}`} controls className="w-full h-auto bg-black" />
                         )}
@@ -444,7 +451,7 @@ export default function Home() {
                             </button>
                           </div>
                           <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                            {post.comments?.length > 0 ? (
+                            {post.comments && post.comments.length > 0 ? (
                               post.comments.map((comment: any) => (
                                 <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
                                   {comment.content}
