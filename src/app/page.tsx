@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Send, Image as ImageIcon, Trash2, Share2, MessageCircle, 
   Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap, MessageSquare, Eye,
-  TrendingUp, X
+  TrendingUp, X, LayoutGrid, Rss
 } from "lucide-react";
 
 const R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"; 
@@ -21,6 +21,7 @@ const REACTION_EMOJIS: { [key: string]: any } = {
 };
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState("feed"); // 'feed' သို့မဟုတ် '2d3d'
   const [content, setContent] = useState("");
   const [posts, setPosts] = useState<any[]>([]);
   const [onlineCount, setOnlineCount] = useState<number>(1);
@@ -40,7 +41,7 @@ export default function Home() {
   
   const trackedPosts = useRef<Set<number>>(new Set());
 
-  // Theme Initial Load & Hydration
+  // Theme Initial Load
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme");
@@ -99,7 +100,6 @@ export default function Home() {
     };
   }, [mounted, fetchPosts]);
 
-  // Clean up preview URL memory
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -116,10 +116,6 @@ export default function Home() {
         body: JSON.stringify({ id, adminKey }) 
       });
       if (res.ok) fetchPosts();
-      else {
-        const err = await res.json();
-        alert(err.message || "Error occurred");
-      }
     } catch (error) { alert("Server error!"); }
   };
 
@@ -138,10 +134,7 @@ export default function Home() {
   };
 
   const submitFeedback = async () => {
-    if (!feedbackText.trim() || feedbackText.length < 5) {
-      alert("Feedback ကို အနည်းဆုံး စာလုံး ၅ လုံး ရေးပေးပါ");
-      return;
-    }
+    if (!feedbackText.trim() || feedbackText.length < 5) return;
     setIsSubmittingFeedback(true);
     try {
       const res = await fetch("/api/feedback", {
@@ -150,11 +143,10 @@ export default function Home() {
         body: JSON.stringify({ content: feedbackText }),
       });
       if (res.ok) {
-        alert("ကျေးဇူးတင်ပါတယ်! Feedback ရရှိပါပြီ။");
         setFeedbackText("");
         setShowFeedback(false);
       }
-    } catch (error) { alert("Submit error!"); } finally { setIsSubmittingFeedback(false); }
+    } finally { setIsSubmittingFeedback(false); }
   };
 
   const handleDelete = async (id: number) => {
@@ -166,9 +158,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, adminKey }) 
       });
-      const data = await res.json();
-      if (data.success) fetchPosts();
-      else alert(data.message || "Delete failed");
+      if (res.ok) fetchPosts();
     } catch (error) { console.error(error); }
   };
 
@@ -178,7 +168,7 @@ export default function Home() {
         await navigator.share({ title: 'ANON Post', text: textContent.substring(0, 100), url: window.location.href });
       } else {
         await navigator.clipboard.writeText(window.location.href);
-        alert("Link copied to clipboard!");
+        alert("Link copied!");
       }
     } catch (error) { console.error(error); }
   };
@@ -196,10 +186,8 @@ export default function Home() {
         setSelectedFile(null);
         setPreviewUrl(null);
         fetchPosts();
-      } else {
-        alert("Post တင်ရာတွင် အမှားအယွင်းရှိနေပါသည်။");
       }
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+    } finally { setLoading(false); }
   };
 
   const handleCommentSubmit = async (postId: number) => {
@@ -222,218 +210,252 @@ export default function Home() {
   return (
     <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-[#020617] text-slate-200' : 'bg-[#f1f5f9] text-slate-900'}`}>
       
+      {/* Navigation */}
       <nav className={`sticky top-0 z-50 border-b transition-all duration-300 ${darkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-white/70 border-slate-200'} backdrop-blur-xl`}>
         <div className="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-black text-xl italic">K</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-black tracking-tighter">ANON</h1>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-bold text-green-500 uppercase">{onlineCount} Active</span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <span className="text-white font-black text-xl italic">K</span>
               </div>
+              <h1 className="hidden md:block text-xl font-black tracking-tighter">ANON</h1>
+            </div>
+
+            {/* Main Menu Tabs */}
+            <div className={`flex p-1 rounded-2xl ${darkMode ? 'bg-slate-900/50' : 'bg-slate-200/50'}`}>
+              <button 
+                onClick={() => setActiveTab("feed")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${activeTab === 'feed' ? 'bg-white dark:bg-slate-800 shadow-sm text-blue-600' : 'opacity-50 hover:opacity-100'}`}
+              >
+                <Rss size={14} /> <span className="hidden sm:inline uppercase">Feed</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab("2d3d")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${activeTab === '2d3d' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600' : 'opacity-50 hover:opacity-100'}`}
+              >
+                <LayoutGrid size={14} /> <span className="hidden sm:inline uppercase">2D/3D</span>
+              </button>
             </div>
           </div>
-          <button onClick={toggleTheme} className={`p-2.5 rounded-full border transition-all ${darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400' : 'bg-white border-slate-200 text-slate-600 shadow-sm'}`}>
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
+
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex flex-col items-end">
+               <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] font-bold text-green-500 uppercase">{onlineCount} Active</span>
+               </div>
+            </div>
+            <button onClick={toggleTheme} className={`p-2.5 rounded-full border transition-all ${darkMode ? 'bg-slate-800 border-slate-700 text-yellow-400' : 'bg-white border-slate-200 text-slate-600 shadow-sm'}`}>
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+          </div>
         </div>
       </nav>
 
       <main className="relative max-w-2xl mx-auto px-4 py-10">
         
-        {/* --- 2D LIVE Result Display --- */}
-        {twodData && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mb-10 overflow-hidden rounded-[32px] p-0.5 bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 shadow-2xl shadow-indigo-500/20"
-          >
-            <div className={`rounded-[31px] p-6 ${darkMode ? 'bg-slate-950' : 'bg-white'}`}>
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-500">
-                    <TrendingUp size={18} />
+        {/* --- 2D/3D CONTENT TAB --- */}
+        {activeTab === "2d3d" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            {twodData ? (
+              <div className="mb-10 overflow-hidden rounded-[32px] p-0.5 bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 shadow-2xl shadow-indigo-500/20">
+                <div className={`rounded-[31px] p-6 ${darkMode ? 'bg-slate-950' : 'bg-white'}`}>
+                  <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-500">
+                        <TrendingUp size={24} />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-black uppercase tracking-widest opacity-60">Thai 2D Live</h2>
+                        <span className="text-[10px] font-black text-indigo-500 animate-pulse">● LIVE UPDATING</span>
+                      </div>
+                    </div>
+                    <span className="text-xs opacity-40 font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{twodData.time}</span>
                   </div>
-                  <h2 className="text-sm font-black uppercase tracking-widest opacity-60">Thai 2D Live</h2>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[10px] font-black text-indigo-500 animate-pulse">● LIVE UPDATING</span>
-                  <span className="text-[9px] opacity-40 font-bold">{twodData.time}</span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-center">
+                    <div className="text-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50">
+                      <p className="text-[10px] font-bold opacity-40 uppercase mb-1">SET Index</p>
+                      <p className="text-2xl font-black tracking-tighter">{twodData.set || "----.--"}</p>
+                    </div>
+
+                    <div className="relative flex flex-col items-center justify-center py-8 px-4 rounded-[32px] bg-indigo-600 text-white shadow-2xl shadow-indigo-600/40 transform hover:scale-105 transition-transform">
+                        <p className="text-[10px] font-black uppercase mb-2 opacity-80">Current 2D</p>
+                        <p className="text-6xl font-black tracking-tighter">{twodData.twod || "--"}</p>
+                    </div>
+
+                    <div className="text-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50">
+                      <p className="text-[10px] font-bold opacity-40 uppercase mb-1">Market Value</p>
+                      <p className="text-2xl font-black tracking-tighter">{twodData.value || "----.--"}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-8 pt-6 border-t dark:border-slate-800 text-center">
+                    <p className="text-xs opacity-40 font-medium italic">Data results are synchronized with Thai Stock Exchange</p>
+                  </div>
                 </div>
               </div>
-
-              <div className="grid grid-cols-3 gap-4 items-center">
-                <div className="text-center">
-                  <p className="text-[10px] font-bold opacity-40 uppercase mb-1">SET Index</p>
-                  <p className="text-xl font-black tracking-tighter">{twodData.set || "----.--"}</p>
-                </div>
-
-                <div className="relative flex flex-col items-center justify-center py-4 px-2 rounded-[24px] bg-indigo-600 text-white shadow-xl shadow-indigo-600/30">
-                   <p className="text-[9px] font-black uppercase mb-1 opacity-80">2D Result</p>
-                   <p className="text-5xl font-black tracking-tighter">{twodData.twod || "--"}</p>
-                </div>
-
-                <div className="text-center">
-                  <p className="text-[10px] font-bold opacity-40 uppercase mb-1">Value</p>
-                  <p className="text-xl font-black tracking-tighter">{twodData.value || "----.--"}</p>
-                </div>
-              </div>
-            </div>
+            ) : (
+              <div className="text-center py-20 opacity-40 font-bold uppercase tracking-widest text-sm">Loading Live Data...</div>
+            )}
           </motion.div>
         )}
 
-        {/* Post Creation Box */}
-        <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
-          <textarea 
-            className={`w-full p-4 rounded-2xl outline-none transition-all resize-none text-lg font-medium bg-transparent ${darkMode ? 'text-white' : 'text-slate-700'}`}
-            placeholder="ဒီနေ့ ဘာတွေထူးခြားလဲ..." rows={3} value={content} onChange={(e) => setContent(e.target.value)}
-          />
-          {previewUrl && (
-            <div className="mt-4 relative rounded-3xl overflow-hidden border-4 border-slate-100 dark:border-slate-800">
-              <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
-              <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black transition-colors">
-                <X size={18} />
-              </button>
+        {/* --- FEED CONTENT TAB --- */}
+        {activeTab === "feed" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {/* Post Creation Box */}
+            <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
+              <textarea 
+                className={`w-full p-4 rounded-2xl outline-none transition-all resize-none text-lg font-medium bg-transparent ${darkMode ? 'text-white' : 'text-slate-700'}`}
+                placeholder="ဒီနေ့ ဘာတွေထူးခြားလဲ..." rows={3} value={content} onChange={(e) => setContent(e.target.value)}
+              />
+              {previewUrl && (
+                <div className="mt-4 relative rounded-3xl overflow-hidden border-4 border-slate-100 dark:border-slate-800">
+                  <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
+                  <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black transition-colors">
+                    <X size={18} />
+                  </button>
+                </div>
+              )}
+              <div className="mt-6 flex justify-between items-center border-t dark:border-slate-800 pt-5">
+                <label className="flex items-center gap-2 cursor-pointer text-blue-500 font-bold px-4 py-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                  <ImageIcon size={20} /> <span className="text-sm">Photo</span>
+                  <input type="file" className="hidden" accept="image/*,video/*" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) { 
+                      if (previewUrl) URL.revokeObjectURL(previewUrl);
+                      setSelectedFile(file); 
+                      setPreviewUrl(URL.createObjectURL(file)); 
+                    }
+                  }} />
+                </label>
+                <button onClick={handleSubmit} disabled={loading || (!content.trim() && !selectedFile)} className={`px-8 py-3 rounded-2xl font-black text-sm uppercase transition-all ${loading ? "bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"}`}>
+                  {loading ? "Posting..." : "Post"}
+                </button>
+              </div>
             </div>
-          )}
-          <div className="mt-6 flex justify-between items-center border-t dark:border-slate-800 pt-5">
-            <label className="flex items-center gap-2 cursor-pointer text-blue-500 font-bold px-4 py-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-              <ImageIcon size={20} /> <span className="text-sm">Photo</span>
-              <input type="file" className="hidden" accept="image/*,video/*" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) { 
-                  if (previewUrl) URL.revokeObjectURL(previewUrl);
-                  setSelectedFile(file); 
-                  setPreviewUrl(URL.createObjectURL(file)); 
-                }
-              }} />
-            </label>
-            <button onClick={handleSubmit} disabled={loading || (!content.trim() && !selectedFile)} className={`px-8 py-3 rounded-2xl font-black text-sm uppercase transition-all ${loading ? "bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"}`}>
-              {loading ? "Posting..." : "Post"}
-            </button>
-          </div>
-        </div>
 
-        {/* Posts Feed */}
-        <div className="space-y-8">
-          <AnimatePresence mode="popLayout">
-            {posts.map((post) => (
-              <motion.div 
-                layout
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                key={post.id} 
-                className={`relative rounded-[32px] p-6 border shadow-xl transition-all ${
-                  post.is_pinned 
-                  ? 'bg-gradient-to-br from-indigo-900/30 to-slate-900/30 border-indigo-500/50 ring-2 ring-indigo-500/10' 
-                  : (darkMode ? 'bg-slate-900/40 border-slate-800/50' : 'bg-white border-slate-100')
-                }`}
-              >
-                {post.is_pinned && (
-                  <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-full flex items-center gap-1.5 shadow-xl shadow-indigo-500/40 z-10 border border-indigo-400">
-                    <Zap size={12} fill="currentColor" /> FEATURED POST
-                  </div>
-                )}
+            {/* Posts Feed */}
+            <div className="space-y-8">
+              <AnimatePresence mode="popLayout">
+                {posts.map((post) => (
+                  <motion.div 
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    key={post.id} 
+                    className={`relative rounded-[32px] p-6 border shadow-xl transition-all ${
+                      post.is_pinned 
+                      ? 'bg-gradient-to-br from-indigo-900/30 to-slate-900/30 border-indigo-500/50 ring-2 ring-indigo-500/10' 
+                      : (darkMode ? 'bg-slate-900/40 border-slate-800/50' : 'bg-white border-slate-100')
+                    }`}
+                  >
+                    {post.is_pinned && (
+                      <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-full flex items-center gap-1.5 shadow-xl shadow-indigo-500/40 z-10 border border-indigo-400">
+                        <Zap size={12} fill="currentColor" /> FEATURED POST
+                      </div>
+                    )}
 
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black ${post.is_pinned ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-blue-400'}`}>
-                      {post.is_pinned ? <Zap size={20} fill="currentColor" /> : "A"}
-                    </div>
-                    <div>
-                      <p className="font-black text-[15px]">Anonymous {post.is_pinned && " (Admin)"}</p>
-                      <div className="flex items-center gap-2 opacity-40">
-                        <p className="text-[10px] font-bold uppercase">{new Date(post.created_at).toLocaleString()}</p>
-                        <span className="w-1 h-1 bg-slate-500 rounded-full" />
-                        <div className="flex items-center gap-1">
-                          <Eye size={12} />
-                          <span className="text-[10px] font-bold">{post.views || 0}</span>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black ${post.is_pinned ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-blue-400'}`}>
+                          {post.is_pinned ? <Zap size={20} fill="currentColor" /> : "A"}
+                        </div>
+                        <div>
+                          <p className="font-black text-[15px]">Anonymous {post.is_pinned && " (Admin)"}</p>
+                          <div className="flex items-center gap-2 opacity-40">
+                            <p className="text-[10px] font-bold uppercase">{new Date(post.created_at).toLocaleString()}</p>
+                            <span className="w-1 h-1 bg-slate-500 rounded-full" />
+                            <div className="flex items-center gap-1">
+                              <Eye size={12} />
+                              <span className="text-[10px] font-bold">{post.views || 0}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handlePin(post.id)} className={`p-2 transition-colors ${post.is_pinned ? 'text-yellow-400' : 'text-slate-400 hover:text-yellow-500'}`}>
+                          <Zap size={18} fill={post.is_pinned ? "currentColor" : "none"} />
+                        </button>
+                        <button onClick={() => handleDelete(post.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => handlePin(post.id)} className={`p-2 transition-colors ${post.is_pinned ? 'text-yellow-400' : 'text-slate-400 hover:text-yellow-500'}`}>
-                      <Zap size={18} fill={post.is_pinned ? "currentColor" : "none"} />
-                    </button>
-                    <button onClick={() => handleDelete(post.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
-                  </div>
-                </div>
 
-                <p className={`text-[17px] mb-6 whitespace-pre-wrap leading-relaxed ${post.is_pinned ? 'font-medium text-white' : ''}`}>{post.content}</p>
+                    <p className={`text-[17px] mb-6 whitespace-pre-wrap leading-relaxed ${post.is_pinned ? 'font-medium text-white' : ''}`}>{post.content}</p>
 
-                {post.media_url && (
-                  <div className="mb-6 rounded-[24px] overflow-hidden border dark:border-slate-800 shadow-inner bg-black/5">
-                    {post.media_type?.startsWith('image/') ? (
-                      <img src={`${R2_URL}/${post.media_url}`} alt="Post content" className="w-full h-auto max-h-[550px] object-contain" />
-                    ) : (
-                      <video src={`${R2_URL}/${post.media_url}`} controls className="w-full h-auto bg-black" />
+                    {post.media_url && (
+                      <div className="mb-6 rounded-[24px] overflow-hidden border dark:border-slate-800 shadow-inner bg-black/5">
+                        {post.media_type?.startsWith('image/') ? (
+                          <img src={`${R2_URL}/${post.media_url}`} alt="Post content" className="w-full h-auto max-h-[550px] object-contain" />
+                        ) : (
+                          <video src={`${R2_URL}/${post.media_url}`} controls className="w-full h-auto bg-black" />
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
 
-                <div className="flex items-center gap-3 pt-4 border-t dark:border-slate-800/50">
-                  <div className="relative" onMouseLeave={() => setActiveReactionPicker(null)}>
+                    <div className="flex items-center gap-3 pt-4 border-t dark:border-slate-800/50">
+                      <div className="relative" onMouseLeave={() => setActiveReactionPicker(null)}>
+                        <AnimatePresence>
+                          {activeReactionPicker === post.id && (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full mb-4 left-0 flex bg-white dark:bg-slate-800 shadow-2xl border dark:border-slate-700 p-2 rounded-full gap-2 z-30">
+                              {Object.entries(REACTION_EMOJIS).map(([name, config]) => (
+                                <button key={name} onClick={() => handleReaction(post.id, name)} className="text-2xl p-1 hover:scale-125 transition-transform">{config.label}</button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        <button onClick={() => setActiveReactionPicker(activeReactionPicker === post.id ? null : post.id)} className="flex items-center gap-2 font-bold text-sm py-2.5 px-4 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
+                          {post.reaction_type ? <span>{REACTION_EMOJIS[post.reaction_type]?.label}</span> : <ThumbsUp size={18} className="text-slate-400" />}
+                          <span>{post.likes || 0}</span>
+                        </button>
+                      </div>
+
+                      <button onClick={() => setActiveCommentBox(prev => ({ ...prev, [post.id]: !prev[post.id] }))} className="flex items-center gap-2 font-bold text-sm py-2.5 px-4 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
+                        <MessageCircle size={18} className="text-slate-400" /> {post.comments?.length || 0}
+                      </button>
+                      
+                      <button onClick={() => handleShare(post.id, post.content)} className="p-2.5 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 rounded-full transition-all"><Share2 size={18} /></button>
+                    </div>
+
                     <AnimatePresence>
-                      {activeReactionPicker === post.id && (
-                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full mb-4 left-0 flex bg-white dark:bg-slate-800 shadow-2xl border dark:border-slate-700 p-2 rounded-full gap-2 z-30">
-                          {Object.entries(REACTION_EMOJIS).map(([name, config]) => (
-                            <button key={name} onClick={() => handleReaction(post.id, name)} className="text-2xl p-1 hover:scale-125 transition-transform">{config.label}</button>
-                          ))}
+                      {activeCommentBox[post.id] && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 overflow-hidden">
+                          <div className="flex gap-3">
+                            <input 
+                              className={`flex-1 px-5 py-3 rounded-2xl text-sm outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500' : 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 text-slate-900 shadow-inner'}`}
+                              placeholder="စကားပြောကြည့်ပါ..." value={commentInputs[post.id] || ""}
+                              onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                              onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
+                            />
+                            <button onClick={() => handleCommentSubmit(post.id)} className="w-12 h-12 flex items-center justify-center bg-indigo-600 text-white rounded-2xl shadow-lg hover:bg-indigo-500 transition-all active:scale-90">
+                              <Send size={18} />
+                            </button>
+                          </div>
+                          <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {post.comments?.length > 0 ? (
+                              post.comments.map((comment: any) => (
+                                <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
+                                  {comment.content}
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-center text-sm opacity-40 py-4 italic">မှတ်ချက် မရှိသေးပါ။</p>
+                            )}
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    <button onClick={() => setActiveReactionPicker(activeReactionPicker === post.id ? null : post.id)} className="flex items-center gap-2 font-bold text-sm py-2.5 px-4 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
-                      {post.reaction_type ? <span>{REACTION_EMOJIS[post.reaction_type]?.label}</span> : <ThumbsUp size={18} className="text-slate-400" />}
-                      <span>{post.likes || 0}</span>
-                    </button>
-                  </div>
-
-                  <button onClick={() => setActiveCommentBox(prev => ({ ...prev, [post.id]: !prev[post.id] }))} className="flex items-center gap-2 font-bold text-sm py-2.5 px-4 rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 transition-all">
-                    <MessageCircle size={18} className="text-slate-400" /> {post.comments?.length || 0}
-                  </button>
-                  
-                  <button onClick={() => handleShare(post.id, post.content)} className="p-2.5 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 rounded-full transition-all"><Share2 size={18} /></button>
-                </div>
-
-                <AnimatePresence>
-                  {activeCommentBox[post.id] && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 overflow-hidden">
-                      <div className="flex gap-3">
-                        <input 
-                          className={`flex-1 px-5 py-3 rounded-2xl text-sm outline-none border transition-all ${darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500' : 'bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 text-slate-900 shadow-inner'}`}
-                          placeholder="စကားပြောကြည့်ပါ..." value={commentInputs[post.id] || ""}
-                          onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
-                          onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.id)}
-                        />
-                        <button onClick={() => handleCommentSubmit(post.id)} className="w-12 h-12 flex items-center justify-center bg-indigo-600 text-white rounded-2xl shadow-lg hover:bg-indigo-500 transition-all active:scale-90">
-                          <Send size={18} />
-                        </button>
-                      </div>
-                      <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                        {post.comments?.length > 0 ? (
-                          post.comments.map((comment: any) => (
-                            <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
-                              {comment.content}
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-center text-sm opacity-40 py-4 italic">မှတ်ချက် မရှိသေးပါ။</p>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
       </main>
 
+      {/* Floating Action Button */}
       <button onClick={() => setShowFeedback(true)} className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white dark:border-slate-900">
         <MessageSquare size={26} />
       </button>
