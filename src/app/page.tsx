@@ -41,7 +41,6 @@ export default function Home() {
   
   const trackedPosts = useRef<Set<number>>(new Set());
 
-  // Theme Initial Load
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme");
@@ -90,38 +89,28 @@ export default function Home() {
 
   useEffect(() => {
     if (!mounted) return;
-
     const updateData = () => {
-      if (activeTab === "2d3d") {
-        fetch2D();
-      } else {
-        fetchPosts();
-      }
+      if (activeTab === "2d3d") fetch2D();
+      else fetchPosts();
     };
-
     updateData();
-
     const refreshInterval = activeTab === "2d3d" ? 5000 : 15000;
     const intervalId = setInterval(updateData, refreshInterval);
-
     return () => clearInterval(intervalId);
   }, [mounted, fetchPosts, fetch2D, activeTab]); 
 
-  // File Preview Cleanup (Memory Leak ကာကွယ်ရန်)
   useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
+    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
   }, [previewUrl]);
 
   const handlePin = async (id: number) => {
-    const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ (Pin/Unpin လုပ်ရန်)");
+    const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ");
     if (!adminKey) return;
     try {
       const res = await fetch("/api/posts", { 
         method: "PATCH", 
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, adminKey, action: "pin" }) // Added action key for clarity
+        body: JSON.stringify({ id, adminKey, action: "pin" })
       });
       if (res.ok) fetchPosts();
     } catch (error) { alert("Server error!"); }
@@ -171,7 +160,7 @@ export default function Home() {
   };
 
   const handleShare = async (id: number, textContent: string) => {
-    const shareUrl = `${window.location.origin}/post/${id}`; // More specific URL
+    const shareUrl = `${window.location.origin}/post/${id}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: 'ANON Post', text: textContent.substring(0, 100), url: shareUrl });
@@ -203,8 +192,6 @@ export default function Home() {
   const handleCommentSubmit = async (postId: number) => {
     const commentText = commentInputs[postId];
     if (!commentText?.trim()) return;
-    
-    // JSON fetch for comments is often cleaner than FormData if no file is involved
     try {
       const response = await fetch("/api/comments", { 
         method: "POST", 
@@ -218,7 +205,6 @@ export default function Home() {
     } catch (error) { console.error(error); }
   };
 
-  // SSR Hydration fix: Render nothing until mounted to prevent theme mismatch
   if (!mounted) return null;
 
   return (
@@ -267,44 +253,66 @@ export default function Home() {
 
       <main className="relative max-w-2xl mx-auto px-4 py-10">
         
-        {/* --- 2D/3D CONTENT TAB --- */}
+        {/* --- 2D/3D CONTENT TAB (Updated with image_1db660.png style) --- */}
         {activeTab === "2d3d" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
             {twodData ? (
-              <div className="mb-10 overflow-hidden rounded-[32px] p-0.5 bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 shadow-2xl shadow-indigo-500/20">
-                <div className={`rounded-[31px] p-6 ${darkMode ? 'bg-slate-950' : 'bg-white'}`}>
-                  <div className="flex justify-between items-center mb-8">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-500">
+              <div className="relative group mx-auto max-w-xl">
+                {/* Background Glow */}
+                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[30px] blur opacity-25"></div>
+                
+                <div className={`relative overflow-hidden rounded-[28px] border border-white/10 p-8 shadow-2xl backdrop-blur-2xl ${darkMode ? 'bg-slate-950/80' : 'bg-white/90'}`}>
+                  
+                  {/* Header */}
+                  <div className="flex justify-between items-start mb-10">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400 border border-indigo-500/30">
                         <TrendingUp size={24} />
                       </div>
                       <div>
-                        <h2 className="text-sm font-black uppercase tracking-widest opacity-60">Thai 2D Live</h2>
-                        <span className="text-[10px] font-black text-indigo-500 animate-pulse">● LIVE UPDATING</span>
+                        <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-400">Thai 2D Live</h2>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </span>
+                          <span className="text-[9px] font-bold text-green-500 uppercase tracking-widest">Live Updating</span>
+                        </div>
                       </div>
                     </div>
-                    <span className="text-xs opacity-40 font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{twodData.time}</span>
+                    <span className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-slate-500/10 border border-white/5 opacity-60">
+                      {twodData.time}
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-center">
-                    <div className="text-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50">
-                      <p className="text-[10px] font-bold opacity-40 uppercase mb-1">SET Index</p>
-                      <p className="text-2xl font-black tracking-tighter">{twodData.set || "----.--"}</p>
+                  {/* 2D Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                    <div className="text-center p-6 rounded-2xl bg-white/5 border border-white/5">
+                      <p className="text-[9px] font-black opacity-40 uppercase tracking-widest mb-3">Set Index</p>
+                      <p className="text-2xl font-black tracking-tight">{twodData.set || "----.--"}</p>
                     </div>
 
-                    <div className="relative flex flex-col items-center justify-center py-8 px-4 rounded-[32px] bg-indigo-600 text-white shadow-2xl shadow-indigo-600/40 transform hover:scale-105 transition-transform">
-                        <p className="text-[10px] font-black uppercase mb-2 opacity-80">Current 2D</p>
-                        <p className="text-6xl font-black tracking-tighter">{twodData.twod || "--"}</p>
+                    {/* Central Highlight */}
+                    <div className="relative group/num">
+                      <div className="absolute -inset-4 bg-indigo-600/20 blur-xl rounded-full opacity-0 group-hover/num:opacity-100 transition-opacity"></div>
+                      <div className="relative flex flex-col items-center justify-center py-10 px-6 rounded-[32px] bg-gradient-to-b from-indigo-600 to-indigo-700 text-white shadow-[0_20px_50px_rgba(79,70,229,0.3)] transform hover:scale-105 transition-all">
+                          <p className="text-[9px] font-black uppercase mb-3 tracking-[0.3em] opacity-80">Current 2D</p>
+                          <p className="text-7xl font-black tracking-tighter drop-shadow-2xl">
+                            {twodData.twod || "--"}
+                          </p>
+                      </div>
                     </div>
 
-                    <div className="text-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50">
-                      <p className="text-[10px] font-bold opacity-40 uppercase mb-1">Market Value</p>
-                      <p className="text-2xl font-black tracking-tighter">{twodData.value || "----.--"}</p>
+                    <div className="text-center p-6 rounded-2xl bg-white/5 border border-white/5">
+                      <p className="text-[9px] font-black opacity-40 uppercase tracking-widest mb-3">Market Value</p>
+                      <p className="text-2xl font-black tracking-tight">{twodData.value || "----.--"}</p>
                     </div>
                   </div>
                   
-                  <div className="mt-8 pt-6 border-t dark:border-slate-800 text-center">
-                    <p className="text-xs opacity-40 font-medium italic">Data results are synchronized with Thai Stock Exchange</p>
+                  <div className="mt-12 text-center">
+                    <p className="text-[10px] font-medium italic opacity-30 tracking-wide">
+                      Data results are synchronized with Thai Stock Exchange
+                    </p>
                   </div>
                 </div>
               </div>
@@ -317,7 +325,6 @@ export default function Home() {
         {/* --- FEED CONTENT TAB --- */}
         {activeTab === "feed" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {/* Post Creation Box */}
             <div className={`rounded-[32px] p-6 mb-12 border shadow-2xl transition-all ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-white'}`}>
               <textarea 
                 className={`w-full p-4 rounded-2xl outline-none transition-all resize-none text-lg font-medium bg-transparent ${darkMode ? 'text-white' : 'text-slate-700'}`}
@@ -353,7 +360,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Posts Feed */}
             <div className="space-y-8">
               <AnimatePresence mode="popLayout">
                 {posts.map((post) => (
@@ -370,7 +376,7 @@ export default function Home() {
                     }`}
                   >
                     {post.is_pinned && (
-                      <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-full flex items-center gap-1.5 shadow-xl shadow-indigo-500/40 z-10 border border-indigo-400">
+                      <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-full flex items-center gap-1.5 shadow-xl z-10 border border-indigo-400">
                         <Zap size={12} fill="currentColor" /> FEATURED POST
                       </div>
                     )}
@@ -450,7 +456,7 @@ export default function Home() {
                               <Send size={18} />
                             </button>
                           </div>
-                          <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                          <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar text-left">
                             {post.comments && post.comments.length > 0 ? (
                               post.comments.map((comment: any) => (
                                 <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
@@ -472,7 +478,7 @@ export default function Home() {
         )}
       </main>
 
-      {/* Floating Action Button */}
+      {/* Feedback FAB */}
       <button onClick={() => setShowFeedback(true)} className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 border-4 border-white dark:border-slate-900">
         <MessageSquare size={26} />
       </button>
