@@ -88,25 +88,24 @@ export default function Home() {
     } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
-  // --- အဓိက ပြင်ဆင်လိုက်သည့်အပိုင်း ---
+  // --- Live Update Logic (၅ စက္ကန့် Update အဖြစ် ပြင်ဆင်ပြီး) ---
   useEffect(() => {
     if (!mounted) return;
 
-    // Tab ပြောင်းလိုက်တာနဲ့ သက်ဆိုင်ရာ data ကို ချက်ချင်းဆွဲမယ်
-    if (activeTab === "2d3d") {
-      fetch2D();
-    } else {
-      fetchPosts();
-    }
-
-    // Background Refresh Logic
-    const intervalId = setInterval(() => {
+    const updateData = () => {
       if (activeTab === "2d3d") {
         fetch2D();
       } else {
         fetchPosts();
       }
-    }, activeTab === "2d3d" ? 60000 : 15000); // 2D ဆိုရင် 1 မိနစ်တစ်ခါ၊ Feed ဆိုရင် 15 စက္ကန့်တစ်ခါ
+    };
+
+    // Tab ပြောင်းလျှင် ချက်ချင်း Update လုပ်မည်
+    updateData();
+
+    // 2D ဆိုလျှင် ၅ စက္ကန့်၊ Feed ဆိုလျှင် ၁၅ စက္ကန့် Refresh လုပ်မည်
+    const refreshInterval = activeTab === "2d3d" ? 5000 : 15000;
+    const intervalId = setInterval(updateData, refreshInterval);
 
     return () => clearInterval(intervalId);
   }, [mounted, fetchPosts, fetch2D, activeTab]); 
