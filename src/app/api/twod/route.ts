@@ -4,41 +4,38 @@ export const runtime = 'edge';
 
 export async function GET() {
   try {
-    // API ကနေ Data ဆွဲတဲ့အခါ တကယ်လို့ Data က ပုံမှန်မဟုတ်ဘဲ 
-    // Null သို့မဟုတ် Undefined ဖြစ်နေရင် Error မတက်အောင် ကာကွယ်ထားတဲ့ ပုံစံပါ
+    // Thai 2D Live Data ရယူရန် Public API တစ်ခုကို အသုံးပြုခြင်း
+    // မှတ်ချက် - ဒီ API Link က အပြောင်းအလဲ ရှိနိုင်ပါတယ်။
+    const response = await fetch('https://api.thaistock2d.com/live', {
+      next: { revalidate: 0 } // Cache မလုပ်ဘဲ အမြဲတမ်း data အသစ်ယူရန်
+    });
+
+    if (!response.ok) throw new Error('Network response was not ok');
     
-    // မှတ်ချက် - ဒီနေရာမှာ တကယ့် Live API URL ရှိရင် fetch နဲ့ ပြန်ချိတ်နိုင်ပါတယ်
-    const setData: string | null = "1420.55"; 
-    const valueData: string | null = "25600.12";
-
-    const getLastDigit = (input: string | undefined | null): string => {
-      if (!input || typeof input !== 'string') return "0";
-      // ဒသမနောက်က နောက်ဆုံးဂဏန်းကို ယူတဲ့ logic
-      const parts = input.split('.');
-      if (parts.length < 2) return "0"; // ဒသမ မပါရင် 0 ပြန်မယ်
-      return parts[1].slice(-1);
-    };
-
-    const setDigit = getLastDigit(setData);
-    const valueDigit = getLastDigit(valueData);
+    const result = await response.json();
     
-    const twod = `${setDigit}${valueDigit}`;
+    // API ကနေ ရလာတဲ့ Live data များ
+    const setData = result.live.set;     // ဥပမာ: "1420.55"
+    const valueData = result.live.value; // ဥပမာ: "25600.12"
+    const twod = result.live.twod;       // ဥပမာ: "52"
+    const time = result.live.time;       // ဥပမာ: "12:05:00"
 
-    // Frontend က တိုက်ရိုက်ဖတ်နေတဲ့ key တွေအတိုင်း ပြန်ပေးရပါမယ်
     return NextResponse.json({
-      set: setData ?? "----.--",
-      value: valueData ?? "----.--",
-      twod: twod,
-      time: new Date().toLocaleTimeString('en-US', { hour12: false }) // Time ထည့်ပေးလိုက်တယ်
+      set: setData || "----.--",
+      value: valueData || "----.--",
+      twod: twod || "--",
+      time: time || "Updating..."
     });
 
   } catch (error) {
-    console.error("2D Route Error:", error);
+    console.error("2D Fetch Error:", error);
+    
+    // API အလုပ်မလုပ်တဲ့အခါ app error မတက်အောင် default data ပြန်ပေးခြင်း
     return NextResponse.json({ 
-      set: "----.--",
-      value: "----.--",
-      twod: "--",
-      time: "--:--:--"
-    }, { status: 200 }); // Error တက်ရင်တောင် Format မပျက်အောင် 200 နဲ့ပဲ ပြန်ပေးထားတယ်
+      set: "Server",
+      value: "Error",
+      twod: "!!",
+      time: "Offline"
+    });
   }
 }
