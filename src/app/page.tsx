@@ -21,7 +21,7 @@ const REACTION_EMOJIS: { [key: string]: any } = {
 };
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("feed"); // 'feed' သို့မဟုတ် '2d3d'
+  const [activeTab, setActiveTab] = useState("feed"); 
   const [content, setContent] = useState("");
   const [posts, setPosts] = useState<any[]>([]);
   const [onlineCount, setOnlineCount] = useState<number>(1);
@@ -60,7 +60,7 @@ export default function Home() {
     });
   };
 
-  const fetch2D = async () => {
+  const fetch2D = useCallback(async () => {
     try {
       const res = await fetch("/api/twod");
       if (res.ok) {
@@ -68,7 +68,7 @@ export default function Home() {
         setTwodData(data);
       }
     } catch (error) { console.error("2D Fetch error:", error); }
-  };
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     try {
@@ -88,17 +88,28 @@ export default function Home() {
     } catch (error) { console.error("Fetch error:", error); }
   }, []);
 
+  // --- အဓိက ပြင်ဆင်လိုက်သည့်အပိုင်း ---
   useEffect(() => {
     if (!mounted) return;
-    fetchPosts();
-    fetch2D();
-    const intervalPosts = setInterval(fetchPosts, 15000);
-    const interval2D = setInterval(fetch2D, 60000); 
-    return () => {
-      clearInterval(intervalPosts);
-      clearInterval(interval2D);
-    };
-  }, [mounted, fetchPosts]);
+
+    // Tab ပြောင်းလိုက်တာနဲ့ သက်ဆိုင်ရာ data ကို ချက်ချင်းဆွဲမယ်
+    if (activeTab === "2d3d") {
+      fetch2D();
+    } else {
+      fetchPosts();
+    }
+
+    // Background Refresh Logic
+    const intervalId = setInterval(() => {
+      if (activeTab === "2d3d") {
+        fetch2D();
+      } else {
+        fetchPosts();
+      }
+    }, activeTab === "2d3d" ? 60000 : 15000); // 2D ဆိုရင် 1 မိနစ်တစ်ခါ၊ Feed ဆိုရင် 15 စက္ကန့်တစ်ခါ
+
+    return () => clearInterval(intervalId);
+  }, [mounted, fetchPosts, fetch2D, activeTab]); 
 
   useEffect(() => {
     return () => {
