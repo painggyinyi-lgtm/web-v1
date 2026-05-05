@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Send, Image as ImageIcon, Trash2, Share2, MessageCircle, 
   Moon, Sun, Heart, Smile, Frown, Angry, ThumbsUp, Zap, MessageSquare, Eye,
-  TrendingUp
+  TrendingUp, X
 } from "lucide-react";
 
 const R2_URL = "https://pub-73c20b61589145d9b182874824850bb4.r2.dev"; 
@@ -26,7 +26,7 @@ export default function Home() {
   const [onlineCount, setOnlineCount] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [mounted, setMounted] = useState(false); // Hydration error ကာကွယ်ရန်
+  const [mounted, setMounted] = useState(false); 
   const [commentInputs, setCommentInputs] = useState<{ [key: number]: string }>({});
   const [activeCommentBox, setActiveCommentBox] = useState<{ [key: number]: boolean }>({});
   const [activeReactionPicker, setActiveReactionPicker] = useState<number | null>(null);
@@ -40,22 +40,23 @@ export default function Home() {
   
   const trackedPosts = useRef<Set<number>>(new Set());
 
-  // Theme Initial Load
+  // Theme Initial Load & Hydration
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme");
-    if (savedTheme === "dark" || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      setDarkMode(true);
-      document.documentElement.classList.add("dark");
-    }
+    const isDark = savedTheme === "dark" || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    setDarkMode(isDark);
+    if (isDark) document.documentElement.classList.add("dark");
   }, []);
 
   const toggleTheme = () => {
-    const newMode = !darkMode;
-    setDarkMode(newMode);
-    localStorage.setItem("theme", newMode ? "dark" : "light");
-    if (newMode) document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
+    setDarkMode(prev => {
+      const next = !prev;
+      localStorage.setItem("theme", next ? "dark" : "light");
+      if (next) document.documentElement.classList.add("dark");
+      else document.documentElement.classList.remove("dark");
+      return next;
+    });
   };
 
   const fetch2D = async () => {
@@ -71,13 +72,13 @@ export default function Home() {
   const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/posts");
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       if (data.posts) {
         setPosts(data.posts);
         data.posts.forEach((post: any) => {
           if (!trackedPosts.current.has(post.id)) {
-            fetch(`/api/posts?track=${post.id}`).catch(() => {});
+            fetch(`/api/posts?track=${post.id}`, { method: 'GET' }).catch(() => {});
             trackedPosts.current.add(post.id);
           }
         });
@@ -87,6 +88,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!mounted) return;
     fetchPosts();
     fetch2D();
     const intervalPosts = setInterval(fetchPosts, 15000);
@@ -95,7 +97,14 @@ export default function Home() {
       clearInterval(intervalPosts);
       clearInterval(interval2D);
     };
-  }, [fetchPosts]);
+  }, [mounted, fetchPosts]);
+
+  // Clean up preview URL memory
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handlePin = async (id: number) => {
     const adminKey = prompt("Admin Key ရိုက်ထည့်ပါ (Pin/Unpin လုပ်ရန်)");
@@ -109,20 +118,22 @@ export default function Home() {
       if (res.ok) fetchPosts();
       else {
         const err = await res.json();
-        alert(err.message || "Error");
+        alert(err.message || "Error occurred");
       }
-    } catch (error) { console.error(error); }
+    } catch (error) { alert("Server error!"); }
   };
 
   const handleReaction = async (id: number, type: string) => {
     try {
-      await fetch("/api/posts", {
+      const res = await fetch("/api/posts", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, reactionType: type }),
       });
-      setActiveReactionPicker(null);
-      fetchPosts();
+      if (res.ok) {
+        setActiveReactionPicker(null);
+        fetchPosts();
+      }
     } catch (error) { console.error(error); }
   };
 
@@ -143,7 +154,7 @@ export default function Home() {
         setFeedbackText("");
         setShowFeedback(false);
       }
-    } catch (error) { alert("Error!"); } finally { setIsSubmittingFeedback(false); }
+    } catch (error) { alert("Submit error!"); } finally { setIsSubmittingFeedback(false); }
   };
 
   const handleDelete = async (id: number) => {
@@ -157,14 +168,14 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.success) fetchPosts();
-      else alert(data.message || "Error");
+      else alert(data.message || "Delete failed");
     } catch (error) { console.error(error); }
   };
 
   const handleShare = async (id: number, textContent: string) => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'ANON Post', text: textContent, url: window.location.href });
+        await navigator.share({ title: 'ANON Post', text: textContent.substring(0, 100), url: window.location.href });
       } else {
         await navigator.clipboard.writeText(window.location.href);
         alert("Link copied to clipboard!");
@@ -185,6 +196,8 @@ export default function Home() {
         setSelectedFile(null);
         setPreviewUrl(null);
         fetchPosts();
+      } else {
+        alert("Post တင်ရာတွင် အမှားအယွင်းရှိနေပါသည်။");
       }
     } catch (error) { console.error(error); } finally { setLoading(false); }
   };
@@ -204,7 +217,7 @@ export default function Home() {
     } catch (error) { console.error(error); }
   };
 
-  if (!mounted) return <div className="min-h-screen bg-slate-900" />; // Initial loading state
+  if (!mounted) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-black">ANON</div>;
 
   return (
     <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-[#020617] text-slate-200' : 'bg-[#f1f5f9] text-slate-900'}`}>
@@ -281,7 +294,9 @@ export default function Home() {
           {previewUrl && (
             <div className="mt-4 relative rounded-3xl overflow-hidden border-4 border-slate-100 dark:border-slate-800">
               <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
-              <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black">✕</button>
+              <button onClick={() => {setPreviewUrl(null); setSelectedFile(null);}} className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white hover:bg-black transition-colors">
+                <X size={18} />
+              </button>
             </div>
           )}
           <div className="mt-6 flex justify-between items-center border-t dark:border-slate-800 pt-5">
@@ -289,7 +304,11 @@ export default function Home() {
               <ImageIcon size={20} /> <span className="text-sm">Photo</span>
               <input type="file" className="hidden" accept="image/*,video/*" onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) { setSelectedFile(file); setPreviewUrl(URL.createObjectURL(file)); }
+                if (file) { 
+                  if (previewUrl) URL.revokeObjectURL(previewUrl);
+                  setSelectedFile(file); 
+                  setPreviewUrl(URL.createObjectURL(file)); 
+                }
               }} />
             </label>
             <button onClick={handleSubmit} disabled={loading || (!content.trim() && !selectedFile)} className={`px-8 py-3 rounded-2xl font-black text-sm uppercase transition-all ${loading ? "bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"}`}>
@@ -326,7 +345,7 @@ export default function Home() {
                       {post.is_pinned ? <Zap size={20} fill="currentColor" /> : "A"}
                     </div>
                     <div>
-                      <p className="font-black text-[15px]">Anonymous {post.is_pinned && " (Admin's Choice)"}</p>
+                      <p className="font-black text-[15px]">Anonymous {post.is_pinned && " (Admin)"}</p>
                       <div className="flex items-center gap-2 opacity-40">
                         <p className="text-[10px] font-bold uppercase">{new Date(post.created_at).toLocaleString()}</p>
                         <span className="w-1 h-1 bg-slate-500 rounded-full" />
@@ -348,9 +367,9 @@ export default function Home() {
                 <p className={`text-[17px] mb-6 whitespace-pre-wrap leading-relaxed ${post.is_pinned ? 'font-medium text-white' : ''}`}>{post.content}</p>
 
                 {post.media_url && (
-                  <div className="mb-6 rounded-[24px] overflow-hidden border dark:border-slate-800 shadow-inner">
+                  <div className="mb-6 rounded-[24px] overflow-hidden border dark:border-slate-800 shadow-inner bg-black/5">
                     {post.media_type?.startsWith('image/') ? (
-                      <img src={`${R2_URL}/${post.media_url}`} alt="Post content" className="w-full h-auto max-h-[550px] object-contain bg-black/10" />
+                      <img src={`${R2_URL}/${post.media_url}`} alt="Post content" className="w-full h-auto max-h-[550px] object-contain" />
                     ) : (
                       <video src={`${R2_URL}/${post.media_url}`} controls className="w-full h-auto bg-black" />
                     )}
@@ -396,11 +415,15 @@ export default function Home() {
                         </button>
                       </div>
                       <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                        {post.comments?.map((comment: any) => (
-                          <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
-                            {comment.content}
-                          </div>
-                        ))}
+                        {post.comments?.length > 0 ? (
+                          post.comments.map((comment: any) => (
+                            <div key={comment.id} className={`p-4 rounded-[20px] text-[14px] leading-relaxed ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
+                              {comment.content}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-center text-sm opacity-40 py-4 italic">မှတ်ချက် မရှိသေးပါ။</p>
+                        )}
                       </div>
                     </motion.div>
                   )}
